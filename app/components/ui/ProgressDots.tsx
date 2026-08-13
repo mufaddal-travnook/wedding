@@ -1,0 +1,32 @@
+'use client';
+
+import { useJourney } from '@/app/lib/hooks/useJourneyState';
+import { defaultConfig } from '@/app/config/default-config';
+
+export function ProgressDots() {
+  const { stage, eventIdx } = useJourney();
+  const theme = defaultConfig.events[eventIdx]?.theme;
+
+  if (stage === 'loading' || stage === 'gate' || stage === 'naming') return null;
+
+  return (
+    <div className="fixed top-[26px] left-[22px] z-[6] flex gap-[10px] items-center transition-opacity duration-1000">
+      {defaultConfig.events.map((event, i) => (
+        <div
+          key={event.id}
+          className="w-[7px] h-[7px] rounded-full transition-all duration-600"
+          style={{
+            background: i === eventIdx
+              ? (theme?.accent ?? '#e8b86d')
+              : i < eventIdx
+                ? 'rgba(255,255,255,0.75)'
+                : 'rgba(255,255,255,0.32)',
+            transform: i === eventIdx ? 'scale(1.5)' : 'scale(1)',
+            boxShadow: i === eventIdx ? `0 0 12px ${theme?.accent ?? '#e8b86d'}` : '0 0 8px rgba(0,0,0,0.3)',
+          }}
+          title={event.label}
+        />
+      ))}
+    </div>
+  );
+}

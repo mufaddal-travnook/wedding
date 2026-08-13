@@ -1,0 +1,11 @@
+export { Tree } from './Tree';
+export { Palm } from './Palm';
+export { Flower } from './Flower';
+export { FlowerBed } from './FlowerBed';
+export { Lantern } from './Lantern';
+export { Chair } from './Chair';
+export { Drape } from './Drape';
+export { StringLights } from './StringLights';
+export { Person } from './Person';
+export { Horse } from './Horse';
+export { Fountain } from './Fountain';
