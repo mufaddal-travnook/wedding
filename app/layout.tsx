@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Jost, Marcellus, Great_Vibes } from 'next/font/google';
+import { defaultConfig } from '@/app/config/default-config';
 import './globals.css';
 
 const jost = Jost({
@@ -20,9 +21,11 @@ const greatVibes = Great_Vibes({
   weight: '400',
 });
 
+const { couple } = defaultConfig;
+
 export const metadata: Metadata = {
-  title: 'Ayesha & Rohan — Welcome to Our World',
-  description: 'A guided wedding journey through three celebrations.',
+  title: `${couple.name1} & ${couple.name2} — ${couple.tagline}`,
+  description: `A guided wedding journey for ${couple.name1} & ${couple.name2} · ${couple.date} · ${couple.location}.`,
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {

@@ -2,11 +2,12 @@
 
 import { useJourney } from '@/app/lib/hooks/useJourneyState';
 import { defaultConfig } from '@/app/config/default-config';
+import { useEvents } from '@/app/lib/hooks/useSideConfig';
 
 export function BrandHeader() {
   const { stage, eventIdx } = useJourney();
   const config = defaultConfig;
-  const theme = config.events[eventIdx]?.theme;
+  const theme = useEvents()[eventIdx]?.theme;
 
   if (stage === 'loading') return null;
 

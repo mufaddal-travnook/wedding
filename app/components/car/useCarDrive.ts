@@ -42,7 +42,7 @@ export function useCarDrive(carRef: React.RefObject<Group | null>, speedMultipli
     };
   }, []);
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const drive = driveRef.current;
     const car = carRef.current;
     if (!drive.active || !car) return;
@@ -68,11 +68,15 @@ export function useCarDrive(carRef: React.RefObject<Group | null>, speedMultipli
     // Face direction of travel
     car.rotation.y = drive.toZ < drive.fromZ ? Math.PI : 0;
 
-    // Spin wheels
-    const spinDir = drive.toZ < drive.fromZ ? 1 : -1;
+    // Spin wheels. Use the frame delta, not clock.getDelta() — the latter resets
+    // on every call, so inside traverse only the first wheel would get real time.
+    // rotation.y above already turns the car to face its travel direction, so in
+    // the car's own frame it always moves nose-first and the wheels always roll
+    // forward — the sign must not flip with the Z direction.
+    const spinStep = speed * delta * 18;
     car.traverse((child) => {
       if (child.name === 'wheel') {
-        child.rotation.x += speed * spinDir * state.clock.getDelta() * 18;
+        child.rotation.x += spinStep;
       }
     });
 

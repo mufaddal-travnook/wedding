@@ -1,16 +1,17 @@
 'use client';
 
 import { useJourney } from '@/app/lib/hooks/useJourneyState';
-import { defaultConfig } from '@/app/config/default-config';
+import { useEvents } from '@/app/lib/hooks/useSideConfig';
 
 export function SkyGradient() {
   const { eventIdx, stage } = useJourney();
+  const events = useEvents();
   // Longer transition during driving for smooth crossfade
   const duration = stage === 'driving' ? '6000ms' : '3000ms';
 
   return (
     <>
-      {defaultConfig.events.map((event, i) => {
+      {events.map((event, i) => {
         const { sky } = event;
         const gradient = `linear-gradient(${sky.direction ?? 180}deg, ${sky.stops.join(', ')})`;
         return (

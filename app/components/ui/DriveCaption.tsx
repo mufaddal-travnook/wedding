@@ -1,15 +1,15 @@
 'use client';
 
 import { useJourney } from '@/app/lib/hooks/useJourneyState';
-import { defaultConfig } from '@/app/config/default-config';
+import { useEvents } from '@/app/lib/hooks/useSideConfig';
 
 export function DriveCaption() {
   const { stage, previousEventIdx, eventIdx, guestName } = useJourney();
-  const config = defaultConfig;
+  const events = useEvents();
 
   if (stage !== 'driving') return null;
 
-  const prevEvent = config.events[previousEventIdx];
+  const prevEvent = events[previousEventIdx];
   const caption = prevEvent?.caption;
   if (!caption) return null;
 
@@ -20,8 +20,8 @@ export function DriveCaption() {
       <span
         className="font-[family-name:var(--font-great-vibes)] text-[clamp(22px,3vw,30px)]"
         style={{
-          color: config.events[eventIdx]?.theme.title ?? '#fff',
-          textShadow: `0 2px 16px ${config.events[eventIdx]?.theme.shadow ?? 'rgba(0,0,0,0.5)'}`,
+          color: events[eventIdx]?.theme.title ?? '#fff',
+          textShadow: `0 2px 16px ${events[eventIdx]?.theme.shadow ?? 'rgba(0,0,0,0.5)'}`,
         }}
       >
         {text}

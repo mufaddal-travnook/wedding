@@ -1,9 +1,11 @@
 'use client';
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import type { Group } from 'three';
 import { useJourney, useJourneyDispatch } from '@/app/lib/hooks/useJourneyState';
 import { defaultConfig } from '@/app/config/default-config';
+import { getSideEvents } from '@/app/lib/hooks/useSideConfig';
+import { registerDriveHandler } from '@/app/lib/journey-bridge';
 import { Ground } from './world/Ground';
 import { Road } from './world/Road';
 import { RoadsideDecor } from './world/RoadsideDecor';
@@ -21,7 +23,8 @@ export function Experience() {
   const journey = useJourney();
   const dispatch = useJourneyDispatch();
   const config = defaultConfig;
-  const currentEvent = config.events[journey.eventIdx];
+  const events = getSideEvents(journey.side);
+  const currentEvent = events[journey.eventIdx];
 
   const carRef = useRef<Group>(null);
   const speedMul = config.car.speedMultiplier;
@@ -29,8 +32,8 @@ export function Experience() {
 
   const handleDriveTo = useCallback((targetIdx: number) => {
     if (driveRef.current.active) return;
-    const fromZ = config.events[journey.eventIdx].zoneZ + 9;
-    const toZ = config.events[targetIdx].zoneZ + 9;
+    const fromZ = events[journey.eventIdx].zoneZ + 9;
+    const toZ = events[targetIdx].zoneZ + 9;
     dispatch({ type: 'DRIVE_TO', idx: targetIdx });
     startDrive(fromZ, toZ, targetIdx);
 
@@ -39,36 +42,41 @@ export function Experience() {
     setTimeout(() => {
       dispatch({ type: 'ARRIVE' });
     }, duration + 800);
-  }, [journey.eventIdx, config.events, dispatch, startDrive, driveRef, speedMul]);
+  }, [journey.eventIdx, events, dispatch, startDrive, driveRef, speedMul]);
 
-  if (typeof window !== 'undefined') {
-    (window as any).__weddingDriveTo = handleDriveTo;
-  }
+  // Expose the drive handler to the DOM overlay, which lives in a separate root.
+  useEffect(() => registerDriveHandler(handleDriveTo), [handleDriveTo]);
 
   return (
     <>
       <SceneFog eventId={currentEvent.id} />
       <SceneLights eventId={currentEvent.id} eventZoneZ={currentEvent.zoneZ} />
-      <Ground events={config.events} />
-      <Road events={config.events} />
+      <Ground events={events} />
+      <Road events={events} />
 
       {/* Trees, flowers, lanterns, street lamps along the road */}
-      <RoadsideDecor events={config.events} />
+      <RoadsideDecor events={events} />
 
       {/* Per-zone atmosphere — renders both previous + current during driving for crossfade */}
       {journey.stage === 'driving' && journey.previousEventIdx !== journey.eventIdx && (
         <SkyAtmosphere
-          eventId={config.events[journey.previousEventIdx].id}
-          zoneZ={config.events[journey.previousEventIdx].zoneZ}
+          eventId={events[journey.previousEventIdx].id}
+          zoneZ={events[journey.previousEventIdx].zoneZ}
         />
       )}
       <SkyAtmosphere eventId={currentEvent.id} zoneZ={currentEvent.zoneZ} />
 
       {/* Zone buildings, decorations, characters */}
-      <ZoneLoader events={config.events} currentIdx={journey.eventIdx} />
+      <ZoneLoader events={events} currentIdx={journey.eventIdx} />
 
       {/* Car */}
-      <group ref={carRef} position={[0, 0, config.events[0].zoneZ + 9]}>
+      {/* Rest pose faces -Z, down the road. `useCarDrive` overrides rotation.y
+          to match the travel direction once the car starts moving. */}
+      <group
+        ref={carRef}
+        position={[0, 0, events[0].zoneZ + 9]}
+        rotation={[0, Math.PI, 0]}
+      >
         <WeddingCar
           color={config.car.color}
           trimColor={config.car.trimColor}
@@ -87,7 +95,7 @@ export function Experience() {
 
       <CameraController
         eventIdx={journey.eventIdx}
-        events={config.events}
+        events={events}
         driveState={driveRef}
         carRef={carRef}
         cameraMode={journey.cameraMode}

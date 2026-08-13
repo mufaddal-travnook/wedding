@@ -9,9 +9,8 @@ import { NameModal } from '@/app/components/ui/NameModal';
 import { BrandHeader } from '@/app/components/ui/BrandHeader';
 import { ProgressDots } from '@/app/components/ui/ProgressDots';
 import { SoundToggle } from '@/app/components/ui/SoundToggle';
-import { EventPanel } from '@/app/components/ui/EventPanel';
+import { JourneyOverlay } from '@/app/components/ui/JourneyOverlay';
 import { DriveCaption } from '@/app/components/ui/DriveCaption';
-import { ExploreToggle } from '@/app/components/ui/ExploreToggle';
 import { KeyboardNav } from '@/app/components/ui/KeyboardNav';
 import { AudioProvider, AudioController } from '@/app/components/audio/AudioEngine';
 
@@ -37,9 +36,11 @@ export default function Home() {
         <BrandHeader />
         <ProgressDots />
         <SoundToggle />
-        <EventPanel />
         <DriveCaption />
-        <ExploreToggle />
+
+        {/* Details modal / gift box, explore controls and bottom navigation */}
+        <JourneyOverlay />
+
         <KeyboardNav />
       </AudioProvider>
     </JourneyProvider>

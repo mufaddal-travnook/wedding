@@ -4,11 +4,54 @@
 
 export interface WeddingConfig {
   couple: CoupleConfig;
-  events: EventConfig[];
+  loader: LoaderConfig;
+  /** Each side carries its own full event list. */
+  sides: Record<Side, SideConfig>;
+  guestForm: GuestFormConfig;
   car: CarConfig;
   people: PeopleConfig;
   audio: AudioConfig;
   performance: PerformanceConfig;
+}
+
+export type Side = 'groom' | 'bride';
+
+export interface SideConfig {
+  id: Side;
+  /** Full label, e.g. "Groom's Side". */
+  label: string;
+  /** Button label, e.g. "Groom". */
+  shortLabel: string;
+  /** Glyph or emoji shown on the choice card. */
+  icon: string;
+  /** One-liner under the choice card. */
+  blurb: string;
+  /** Whose family is hosting, shown once the side is picked. */
+  host: string;
+  /** Accent colour for this side's choice card. */
+  accent: string;
+  /**
+   * This side's journey. Event `id`s must stay within the set the 3D world
+   * knows how to build — entrance | nikah | mehendi | reception — since the
+   * zone, lighting, sky and camera presets are keyed by id.
+   */
+  events: EventConfig[];
+}
+
+/** Copy for the guest sign-in modal. */
+export interface GuestFormConfig {
+  eyebrow: string;
+  sideQuestion: string;
+  sideHint?: string;
+  nameQuestion: string;
+  nameHint?: string;
+  namePlaceholder: string;
+  nameMaxLength: number;
+  backLabel: string;
+  submitLabel: string;
+  submittingLabel: string;
+  /** Used when a guest submits an empty name. */
+  fallbackName: string;
 }
 
 export interface CoupleConfig {
@@ -17,6 +60,48 @@ export interface CoupleConfig {
   tagline: string;
   date: string;
   location: string;
+}
+
+export interface LoaderConfig {
+  /** Monogram shown inside the heart. Omit to auto-derive initials from the couple names. */
+  monogram?: string;
+  /** Separator between auto-derived initials (ignored when `monogram` is set). */
+  monogramSeparator?: string;
+  title: string;
+  /** Small line under the step label — omit to hide. */
+  footnote?: string;
+  /** Ordered checkpoints. `at` is the target percentage (0–100). */
+  steps: LoaderStep[];
+  /** ms spent on each step. */
+  stepDurationMs: number;
+  /** ms held at 100% before the fade-out starts. */
+  holdMs: number;
+  /** ms of the fade-out. */
+  fadeMs: number;
+  /** Any CSS `background` value — gradient, solid, or image. */
+  background: string;
+  /** CSS length for the heart; `clamp()` keeps it responsive. */
+  heartSize: string;
+  colors: LoaderColors;
+}
+
+export interface LoaderStep {
+  at: number;
+  label: string;
+}
+
+export interface LoaderColors {
+  monogram: string;
+  title: string;
+  percent: string;
+  step: string;
+  track: string;
+  progressFrom: string;
+  progressTo: string;
+  /** Ambient bloom behind the heart. */
+  glow: string;
+  /** Hairline rules flanking the title. */
+  rule: string;
 }
 
 export interface EventConfig {
@@ -129,20 +214,24 @@ export type CameraMode = 'guided' | 'explore';
 
 export interface JourneyState {
   stage: JourneyStage;
+  /** Which family the guest is here for — drives which event list is used. */
+  side: Side;
   eventIdx: number;
   previousEventIdx: number;  // for crossfade transitions
   guestName: string;
   cameraMode: CameraMode;
   soundOn: boolean;
-  panelOpen: boolean;        // event panel visible or collapsed to gift box
+  /** Event details modal mounted, or collapsed to the gift box trigger. */
+  panelOpen: boolean;
 }
 
 export type JourneyAction =
   | { type: 'SET_STAGE'; stage: JourneyStage }
+  | { type: 'SET_SIDE'; side: Side }
   | { type: 'SET_EVENT'; idx: number }
   | { type: 'SET_GUEST'; name: string }
   | { type: 'SET_CAMERA_MODE'; mode: CameraMode }
   | { type: 'TOGGLE_SOUND' }
-  | { type: 'TOGGLE_PANEL' }
+  | { type: 'SET_PANEL_OPEN'; open: boolean }
   | { type: 'DRIVE_TO'; idx: number }
   | { type: 'ARRIVE' };

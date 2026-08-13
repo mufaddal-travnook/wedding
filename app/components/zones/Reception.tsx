@@ -4,6 +4,7 @@ import { CanvasTexture } from 'three';
 import type { Group } from 'three';
 import { Tree, Person, Horse, StringLights, Lantern, Fountain, Drape } from '../props';
 import { Fireworks } from '../effects/Fireworks';
+import { defaultConfig } from '@/app/config/default-config';
 
 interface ReceptionProps {
   zoneZ: number;
@@ -36,7 +37,8 @@ export function Reception({ zoneZ }: ReceptionProps) {
   const bandRef = useRef<Group>(null);
   const dancersRef = useRef<Group>(null);
 
-  // Marquee texture
+  // Marquee texture — names come from config, never hardcoded
+  const { name1, name2 } = defaultConfig.couple;
   const marqueeTexture = useMemo(() => {
     if (typeof document === 'undefined') return null;
     const cv = document.createElement('canvas');
@@ -46,9 +48,9 @@ export function Reception({ zoneZ }: ReceptionProps) {
     cx.fillStyle = '#ffd27a'; cx.font = '86px cursive';
     cx.textAlign = 'center'; cx.textBaseline = 'middle';
     cx.shadowColor = '#ffb040'; cx.shadowBlur = 26;
-    cx.fillText('Ayesha ♥ Rohan', 512, 84);
+    cx.fillText(`${name1} ♥ ${name2}`, 512, 84);
     return new CanvasTexture(cv);
-  }, []);
+  }, [name1, name2]);
 
   // Band animation
   useFrame((state) => {

@@ -5,6 +5,8 @@ import type { JourneyState, JourneyAction } from '@/app/config/types';
 
 const initialState: JourneyState = {
   stage: 'loading',
+  // Preview default — replaced by the guest's own pick in the name modal.
+  side: 'groom',
   eventIdx: 0,
   previousEventIdx: 0,
   guestName: 'Friend',
@@ -17,6 +19,9 @@ function journeyReducer(state: JourneyState, action: JourneyAction): JourneyStat
   switch (action.type) {
     case 'SET_STAGE':
       return { ...state, stage: action.stage };
+    case 'SET_SIDE':
+      // Sides can have different event lists — restart at the entrance.
+      return { ...state, side: action.side, eventIdx: 0, previousEventIdx: 0 };
     case 'SET_EVENT':
       return { ...state, previousEventIdx: state.eventIdx, eventIdx: action.idx };
     case 'SET_GUEST':
@@ -25,8 +30,8 @@ function journeyReducer(state: JourneyState, action: JourneyAction): JourneyStat
       return { ...state, cameraMode: action.mode };
     case 'TOGGLE_SOUND':
       return { ...state, soundOn: !state.soundOn };
-    case 'TOGGLE_PANEL':
-      return { ...state, panelOpen: !state.panelOpen };
+    case 'SET_PANEL_OPEN':
+      return { ...state, panelOpen: action.open };
     case 'DRIVE_TO':
       return { ...state, stage: 'driving', cameraMode: 'guided', panelOpen: false, previousEventIdx: state.eventIdx, eventIdx: action.idx };
     case 'ARRIVE':

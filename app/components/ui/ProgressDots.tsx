@@ -1,17 +1,18 @@
 'use client';
 
 import { useJourney } from '@/app/lib/hooks/useJourneyState';
-import { defaultConfig } from '@/app/config/default-config';
+import { useEvents } from '@/app/lib/hooks/useSideConfig';
 
 export function ProgressDots() {
   const { stage, eventIdx } = useJourney();
-  const theme = defaultConfig.events[eventIdx]?.theme;
+  const events = useEvents();
+  const theme = events[eventIdx]?.theme;
 
   if (stage === 'loading' || stage === 'gate' || stage === 'naming') return null;
 
   return (
     <div className="fixed top-3 left-3 sm:top-[26px] sm:left-[22px] z-[6] flex gap-2 sm:gap-[10px] items-center transition-opacity duration-1000">
-      {defaultConfig.events.map((event, i) => (
+      {events.map((event, i) => (
         <div
           key={event.id}
           className="w-[7px] h-[7px] rounded-full transition-all duration-600"

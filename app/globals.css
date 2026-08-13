@@ -45,8 +45,44 @@ body {
   animation: shine 3s ease-in-out infinite;
 }
 
+/* Gift box trigger — slow, continuous bounce as an interaction hint */
+@keyframes giftBounce {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-9px); }
+}
+
+.animate-giftBounce {
+  animation: giftBounce 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+/* Loader — double-thump heartbeat + breathing bloom */
+@keyframes loaderBeat {
+  0%, 100% { transform: scale(1); }
+  14%      { transform: scale(1.05); }
+  28%      { transform: scale(1); }
+  42%      { transform: scale(1.028); }
+  60%      { transform: scale(1); }
+}
+
+@keyframes loaderGlow {
+  0%, 100% { opacity: 0.55; transform: scale(0.94); }
+  50%      { opacity: 1;    transform: scale(1.06); }
+}
+
+.animate-loaderBeat {
+  animation: loaderBeat 1.9s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.animate-loaderGlow {
+  animation: loaderGlow 1.9s ease-in-out infinite;
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .animate-shine { animation: none; }
   .animate-pulse { animation: none; }
+  .animate-loaderBeat { animation: none; }
+  .animate-loaderGlow { animation: none; opacity: 0.7; }
+  .animate-giftBounce { animation: none; }
 }
