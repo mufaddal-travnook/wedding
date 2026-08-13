@@ -7,11 +7,11 @@ const ZONE_Z = [0, -85, -170, -255];
 
 export const defaultConfig: WeddingConfig = {
   couple: {
-    name1: 'Ayesha',
-    name2: 'Rohan',
+    name1: 'Mufaddal',
+    name2: 'Mariya',
     tagline: 'Welcome to Our World',
-    date: 'December 12 – 14, 2026',
-    location: 'Dubai',
+    date: 'November 01 – 06, 2026',
+    location: 'Banswara',
   },
 
   events: [
