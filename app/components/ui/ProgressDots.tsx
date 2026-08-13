@@ -10,7 +10,7 @@ export function ProgressDots() {
   if (stage === 'loading' || stage === 'gate' || stage === 'naming') return null;
 
   return (
-    <div className="fixed top-[26px] left-[22px] z-[6] flex gap-[10px] items-center transition-opacity duration-1000">
+    <div className="fixed top-3 left-3 sm:top-[26px] sm:left-[22px] z-[6] flex gap-2 sm:gap-[10px] items-center transition-opacity duration-1000">
       {defaultConfig.events.map((event, i) => (
         <div
           key={event.id}

@@ -10,6 +10,7 @@ const initialState: JourneyState = {
   guestName: 'Friend',
   cameraMode: 'guided',
   soundOn: true,
+  panelOpen: true,
 };
 
 function journeyReducer(state: JourneyState, action: JourneyAction): JourneyState {
@@ -24,10 +25,12 @@ function journeyReducer(state: JourneyState, action: JourneyAction): JourneyStat
       return { ...state, cameraMode: action.mode };
     case 'TOGGLE_SOUND':
       return { ...state, soundOn: !state.soundOn };
+    case 'TOGGLE_PANEL':
+      return { ...state, panelOpen: !state.panelOpen };
     case 'DRIVE_TO':
-      return { ...state, stage: 'driving', cameraMode: 'guided', previousEventIdx: state.eventIdx, eventIdx: action.idx };
+      return { ...state, stage: 'driving', cameraMode: 'guided', panelOpen: false, previousEventIdx: state.eventIdx, eventIdx: action.idx };
     case 'ARRIVE':
-      return { ...state, stage: 'event', cameraMode: 'guided', previousEventIdx: state.eventIdx };
+      return { ...state, stage: 'event', cameraMode: 'guided', panelOpen: true, previousEventIdx: state.eventIdx };
     default:
       return state;
   }

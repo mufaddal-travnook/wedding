@@ -134,6 +134,7 @@ export interface JourneyState {
   guestName: string;
   cameraMode: CameraMode;
   soundOn: boolean;
+  panelOpen: boolean;        // event panel visible or collapsed to gift box
 }
 
 export type JourneyAction =
@@ -142,5 +143,6 @@ export type JourneyAction =
   | { type: 'SET_GUEST'; name: string }
   | { type: 'SET_CAMERA_MODE'; mode: CameraMode }
   | { type: 'TOGGLE_SOUND' }
+  | { type: 'TOGGLE_PANEL' }
   | { type: 'DRIVE_TO'; idx: number }
   | { type: 'ARRIVE' };

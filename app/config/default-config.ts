@@ -19,13 +19,13 @@ export const defaultConfig: WeddingConfig = {
       id: 'entrance',
       label: 'Welcome',
       eyebrow: 'Welcome',
-      title: 'Welcome to Our World',
+      title: 'Welcome to Our Wedding',
       greet: '',
       body: 'Dear {{name}}, you\'ve just stepped through our gates. Sit back — our little car will carry you from one celebration to the next. Three evenings, three worlds, one love story.',
       caption: 'Off we go, {{name}}…',
       meta: [
         { icon: '◆', text: 'Three stops ahead', bold: 'Nikah, Mehendi & Reception' },
-        { icon: '◆', text: 'December 12 – 14, 2026 · Dubai' },
+        { icon: '◆', text: 'November 01 – 06, 2026 · Banswara ' },
       ],
       sky: SKIES.entrance,
       lighting: LIGHTING.entrance,
@@ -42,7 +42,7 @@ export const defaultConfig: WeddingConfig = {
       body: 'With hearts full of gratitude, we invite you to witness the moment we become one — an afternoon washed in white and gold, soft prayers, and the fragrance of jasmine.',
       caption: 'Next, the colours of henna await you, {{name}}…',
       meta: [
-        { icon: '◆', text: 'Friday, December 12', bold: '4:00 in the afternoon' },
+        { icon: '◆', text: 'Wednesday, November 04', bold: '11:00 in the morning' },
         { icon: '◆', text: 'The Pearl Courtyard, Jumeirah' },
         { icon: '◆', text: 'Dress in', bold: 'ivory, beige & gold' },
       ],
@@ -61,7 +61,7 @@ export const defaultConfig: WeddingConfig = {
       body: 'Come with open palms and dancing feet! Marigolds strung from every branch, henna winding into new patterns, and folk songs that won\'t let you sit still.',
       caption: 'And now — the grandest night of all, {{name}}…',
       meta: [
-        { icon: '✿', text: 'Saturday, December 13', bold: '5:00 in the evening' },
+        { icon: '✿', text: 'Monday, November 02', bold: '5:00 in the evening' },
         { icon: '✿', text: 'The Garden House, Al Barsha' },
         { icon: '✿', text: 'Wear your brightest', bold: 'greens & yellows' },
       ],
@@ -80,7 +80,7 @@ export const defaultConfig: WeddingConfig = {
       body: 'the sky itself joins the party. A brass band leads the way, horses stand dressed in finery, and fireworks bloom above the stage. Dinner, dancing, and one unforgettable night.',
       caption: '',
       meta: [
-        { icon: '✦', text: 'Sunday, December 14', bold: '7:30 at night' },
+        { icon: '✦', text: 'Thursday, November 05', bold: '7:30 at night' },
         { icon: '✦', text: 'The Lakeside Lawns, Al Qudra' },
         { icon: '✦', text: 'Live band from 9 · Fireworks at 10' },
       ],
