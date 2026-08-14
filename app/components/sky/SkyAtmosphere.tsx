@@ -214,29 +214,29 @@ export function SkyAtmosphere({ eventId, zoneZ }: { eventId: string; zoneZ: numb
     case 'entrance':
       return (
         <group>
-          <FloatingParticles zoneZ={zoneZ} count={40} color="#ffd9a0" color2="#ffb870" size={0.12} speed={0.3} heightRange={[3, 20]} drift={0.5} glow />
-          <FallingPetals zoneZ={zoneZ} count={25} color="#f5a0b0" color2="#fddde6" />
+          <FloatingParticles zoneZ={zoneZ} count={18} color="#ffd9a0" color2="#ffb870" size={0.07} speed={0.25} heightRange={[4, 18]} drift={0.4} glow />
+          <FallingPetals zoneZ={zoneZ} count={12} color="#f5a0b0" color2="#fddde6" spread={25} />
         </group>
       );
     case 'nikah':
       return (
         <group>
-          <FallingPetals zoneZ={zoneZ} count={30} color="#fff8f0" color2="#f5ead6" />
-          <FloatingParticles zoneZ={zoneZ} count={30} color="#fff5d0" color2="#ffe8b0" size={0.08} speed={0.2} heightRange={[5, 25]} drift={0.3} glow />
+          <FallingPetals zoneZ={zoneZ} count={15} color="#fff8f0" color2="#f5ead6" spread={25} />
+          <FloatingParticles zoneZ={zoneZ} count={12} color="#fff5d0" color2="#ffe8b0" size={0.05} speed={0.15} heightRange={[6, 22]} drift={0.25} glow />
         </group>
       );
     case 'mehendi':
       return (
         <group>
-          <FloatingParticles zoneZ={zoneZ} count={35} color="#f5c040" color2="#f5a623" size={0.1} speed={0.35} heightRange={[2, 16]} drift={0.6} glow />
-          <FallingPetals zoneZ={zoneZ} count={20} color="#f5a623" color2="#f5d000" />
+          <FloatingParticles zoneZ={zoneZ} count={15} color="#f5c040" color2="#f5a623" size={0.06} speed={0.3} heightRange={[3, 14]} drift={0.4} glow />
+          <FallingPetals zoneZ={zoneZ} count={10} color="#f5a623" color2="#f5d000" spread={20} />
         </group>
       );
     case 'reception':
       return (
         <group>
-          <StarField count={400} radius={130} zoneZ={zoneZ} />
-          <FloatingParticles zoneZ={zoneZ} count={40} color="#aabbff" color2="#dde4ff" size={0.08} speed={0.2} heightRange={[4, 22]} drift={0.3} glow />
+          <StarField count={300} radius={140} zoneZ={zoneZ} />
+          <FloatingParticles zoneZ={zoneZ} count={15} color="#aabbff" color2="#dde4ff" size={0.05} speed={0.15} heightRange={[5, 20]} drift={0.2} glow />
         </group>
       );
     default:

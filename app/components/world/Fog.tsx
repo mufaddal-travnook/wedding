@@ -5,8 +5,8 @@ import { LIGHTING } from '@/app/config/lighting-presets';
 
 // Convert linear fog near/far to exponential density
 function fogDensity(near: number, far: number): number {
-  // Approximate: density such that at 'far' distance, fog is ~95% opaque
-  return 2.5 / far;
+  // Lower density — fog only hides the far horizon, not nearby decorations
+  return 1.6 / far;
 }
 
 interface SceneFogProps {

@@ -136,22 +136,14 @@ export function Nikah({ zoneZ }: NikahProps) {
         <Tree key={`jt${i}`} position={[x, 0, z]} scale={0.9 + Math.abs(Math.sin(i)) * 0.4} leafColor="#dfe8d2" />
       ))}
 
-      {/* ===== FLOWER BEDS ===== */}
-      <FlowerBed position={[-4, 0, 3]} count={30} spreadX={16} spreadZ={8} colors={['#fffdf8', '#f3ddc0', '#f7e9c9']} />
+      {/* ===== FLOWER BED — fewer, intentional ===== */}
+      <FlowerBed position={[-10, 0, 4]} count={12} spreadX={6} spreadZ={4} colors={['#fffdf8', '#f3ddc0']} />
 
-      {/* ===== LANTERNS ===== */}
-      {Array.from({ length: 8 }).map((_, i) => (
-        <Lantern
-          key={`nl${i}`}
-          position={[
-            (Math.sin(i * 2.1) * 0.5 + 0.5) * 26 - 18,
-            4 + Math.sin(i * 1.4) * 3,
-            (Math.cos(i * 1.6) * 0.5 + 0.5) * 14 - 7,
-          ]}
-          color="#fff0cf"
-          size={0.24}
-        />
-      ))}
+      {/* ===== LANTERNS — placed, not scattered ===== */}
+      <Lantern position={[-18, 5, 3]} color="#fff0cf" size={0.24} />
+      <Lantern position={[-6, 6.5, -5]} color="#fff0cf" size={0.22} />
+      <Lantern position={[10, 5, 5]} color="#fff0cf" size={0.26} />
+      <Lantern position={[4, 7, -3]} color="#fff0cf" size={0.2} />
 
       {/* ===== FOUNTAIN ===== */}
       <Fountain position={[8, 0, -5]} color="#aaddff" height={2} spread={0.8} />

@@ -140,23 +140,15 @@ export function Mehendi({ zoneZ }: MehendiProps) {
       <StringLights from={[13, 5.3, 0]} to={[19, 4.0, 8]} sag={1.1} count={15} color="#f5a623" />
       <StringLights from={[8, 3.4, -8]} to={[13, 5.3, 0]} sag={1.1} count={13} color="#e8452c" />
 
-      {/* ===== FLOWER BEDS ===== */}
-      <FlowerBed position={[10, 0, 2]} count={35} spreadX={16} spreadZ={8} colors={['#f5d000', '#f5a623', '#ffe36b']} />
-      <FlowerBed position={[-6, 0, 2]} count={16} spreadX={5} spreadZ={5} colors={['#f5d000', '#9ed64f']} />
+      {/* ===== FLOWER BED — single cluster ===== */}
+      <FlowerBed position={[10, 0, 2]} count={18} spreadX={10} spreadZ={5} colors={['#f5d000', '#f5a623', '#ffe36b']} />
 
-      {/* ===== LANTERNS ===== */}
-      {Array.from({ length: 9 }).map((_, i) => (
-        <Lantern
-          key={`ml${i}`}
-          position={[
-            (Math.sin(i * 2.5) * 0.5 + 0.5) * 28 - 4,
-            4 + Math.sin(i * 1.6) * 3.5,
-            (Math.cos(i * 2.0) * 0.5 + 0.5) * 18 - 9,
-          ]}
-          color="#fff0a0"
-          size={0.26}
-        />
-      ))}
+      {/* ===== LANTERNS — curated ===== */}
+      <Lantern position={[15, 6, 5]} color="#fff0a0" size={0.28} />
+      <Lantern position={[8, 5, -6]} color="#fff0a0" size={0.24} />
+      <Lantern position={[20, 7, 2]} color="#fff0a0" size={0.26} />
+      <Lantern position={[-4, 5.5, 4]} color="#fff0a0" size={0.22} />
+      <Lantern position={[12, 8, -2]} color="#fff0a0" size={0.3} />
 
       {/* ===== FOUNTAIN ===== */}
       <Fountain position={[-8, 0, -3]} color="#88ddaa" height={2} spread={1} />

@@ -227,19 +227,11 @@ export function Reception({ zoneZ }: ReceptionProps) {
         <Tree key={`rt${i}`} position={[x, 0, z]} scale={s} leafColor="#2b4d33" />
       ))}
 
-      {/* ===== LANTERNS (blue-tinted for night) ===== */}
-      {Array.from({ length: 8 }).map((_, i) => (
-        <Lantern
-          key={`rl${i}`}
-          position={[
-            (Math.sin(i * 2.3) * 0.5 + 0.5) * 30 - 15,
-            4 + Math.sin(i * 1.5) * 3,
-            (Math.cos(i * 1.7) * 0.5 + 0.5) * 20 - 10,
-          ]}
-          color="#aabbff"
-          size={0.28}
-        />
-      ))}
+      {/* ===== LANTERNS — curated for night ===== */}
+      <Lantern position={[-10, 6, 8]} color="#8899dd" size={0.3} />
+      <Lantern position={[15, 5, 12]} color="#8899dd" size={0.25} />
+      <Lantern position={[0, 7, -4]} color="#aabbff" size={0.28} />
+      <Lantern position={[-14, 5.5, -2]} color="#aabbff" size={0.22} />
 
       {/* ===== FOUNTAIN WITH COLORED LIGHT ===== */}
       <Fountain position={[-5, 0, 4]} color="#8888ff" height={3} spread={1.2} />

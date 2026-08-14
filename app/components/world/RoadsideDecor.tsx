@@ -52,7 +52,7 @@ export function RoadsideDecor({ events }: RoadsideDecorProps) {
   const trees = useMemo(() => {
     const arr: { x: number; z: number; scale: number; type: 'tree' | 'palm'; leafColor: string }[] = [];
     const seed = 42;
-    for (let z = 15; z > lastZ - 15; z -= 8 + Math.sin(z * 0.1 + seed) * 3) {
+    for (let z = 15; z > lastZ - 15; z -= 14 + Math.sin(z * 0.1 + seed) * 4) {
       // Left side
       arr.push({
         x: -8 - Math.abs(Math.sin(z * 0.3)) * 6,
@@ -79,7 +79,7 @@ export function RoadsideDecor({ events }: RoadsideDecorProps) {
   const flowers = useMemo(() => {
     const arr: { x: number; z: number; color: string; scale: number }[] = [];
     const colors = ['#f05a8e', '#f5a623', '#fdf8f2', '#e86fb0', '#ffe27a'];
-    for (let z = 10; z > lastZ - 10; z -= 2.5 + Math.random() * 2) {
+    for (let z = 10; z > lastZ - 10; z -= 6 + Math.random() * 4) {
       const side = Math.sin(z * 1.3) > 0 ? -1 : 1;
       arr.push({
         x: side * (3.8 + Math.abs(Math.sin(z * 0.8)) * 2),

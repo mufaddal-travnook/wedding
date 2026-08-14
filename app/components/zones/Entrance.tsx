@@ -107,24 +107,15 @@ export function Entrance({ zoneZ }: EntranceProps) {
       <Tree position={[-16, 0, 7]} scale={1.0} />
       <Tree position={[15, 0, -4]} scale={0.9} />
 
-      {/* ===== FLOWER BEDS ===== */}
-      <FlowerBed position={[0, 0, 11]} count={30} spreadX={14} spreadZ={3} colors={['#f05a8e', '#f5a623', '#fdf8f2']} />
-      <FlowerBed position={[-10, 0, -2]} count={15} spreadX={4} spreadZ={3} colors={['#f05a8e', '#fdf8f2', '#e86fb0']} />
-      <FlowerBed position={[10, 0, -3]} count={15} spreadX={4} spreadZ={3} colors={['#f5a623', '#ffe27a', '#fdf8f2']} />
+      {/* ===== FLOWER BED — single curated cluster ===== */}
+      <FlowerBed position={[0, 0, 11]} count={16} spreadX={10} spreadZ={2} colors={['#f05a8e', '#f5a623', '#fdf8f2']} />
 
-      {/* ===== FLOATING LANTERNS ===== */}
-      {Array.from({ length: 10 }).map((_, i) => (
-        <Lantern
-          key={`el${i}`}
-          position={[
-            (Math.sin(i * 2.3) * 0.5 + 0.5) * 28 - 14,
-            4.5 + Math.sin(i * 1.7) * 3,
-            (Math.cos(i * 1.9) * 0.5 + 0.5) * 16 - 8,
-          ]}
-          color="#ffd9a0"
-          size={0.28}
-        />
-      ))}
+      {/* ===== FLOATING LANTERNS — fewer, intentional ===== */}
+      <Lantern position={[-8, 6, 4]} color="#ffd9a0" size={0.3} />
+      <Lantern position={[8, 7, 2]} color="#ffd9a0" size={0.25} />
+      <Lantern position={[-4, 8, -3]} color="#ffd9a0" size={0.28} />
+      <Lantern position={[5, 5.5, 8]} color="#ffd9a0" size={0.22} />
+      <Lantern position={[0, 9, 0]} color="#ffd9a0" size={0.35} />
 
       {/* ===== FOUNTAIN ===== */}
       <Fountain position={[12, 0, 0]} color="#88ccff" height={2.5} />
