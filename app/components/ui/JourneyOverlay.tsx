@@ -3,11 +3,10 @@
 import { useCallback } from 'react';
 import { useJourney, useJourneyDispatch } from '@/app/lib/hooks/useJourneyState';
 import { useEvents } from '@/app/lib/hooks/useSideConfig';
-import { driveTo } from '@/app/lib/journey-bridge';
 import { EventDetailsModal } from './EventDetailsModal';
 import { GiftBoxTrigger } from './GiftBoxTrigger';
 import { ExploreControls } from './ExploreControls';
-import { EventNavigationBar } from './EventNavigationBar';
+import { NAV_BAND_PX } from './EventNavigationBar';
 
 /**
  * Layout shell for the in-journey overlay.
@@ -19,11 +18,14 @@ import { EventNavigationBar } from './EventNavigationBar';
  *   │ content band (flex-1)        │  ← gift box / details modal, beside the zone
  *   ├──────────────────────────────┤
  *   │ explore controls             │  ← grows upward when explore mode opens
- *   │ navigation bar               │  ← stays pinned to the bottom edge
  *   └──────────────────────────────┘
  *
  * Because the column is anchored at the bottom, revealing the explore buttons
- * extends the stack upward instead of displacing the navigation bar.
+ * extends the stack upward.
+ *
+ * Navigation is NOT part of this shell — EventNavigationBar mounts separately
+ * in `page.tsx` so it survives this overlay unmounting during driving. The
+ * bottom padding below reserves room for it.
  */
 export function JourneyOverlay() {
   const journey = useJourney();
@@ -40,14 +42,6 @@ export function JourneyOverlay() {
     () => dispatch({ type: 'SET_PANEL_OPEN', open: false }),
     [dispatch],
   );
-
-  const goPrevious = useCallback(() => {
-    if (journey.eventIdx > 0) driveTo(journey.eventIdx - 1);
-  }, [journey.eventIdx]);
-
-  const goNext = useCallback(() => {
-    if (journey.eventIdx < events.length - 1) driveTo(journey.eventIdx + 1);
-  }, [journey.eventIdx, events.length]);
 
   if (journey.stage !== 'event' || !event) return null;
 
@@ -72,21 +66,19 @@ export function JourneyOverlay() {
         )}
       </div>
 
-      {/* Bottom stack — explore controls above, navigation pinned below. */}
-      <div className="flex shrink-0 flex-col gap-3 px-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:gap-4 sm:px-6 sm:pb-6">
+      {/* Explore controls sit above the independently-mounted navigation bar.
+          Padding comes from NAV_BAND_PX so the reservation can never drift out
+          of sync with the bar's actual height. */}
+      <div
+        className="flex shrink-0 flex-col px-3 sm:px-6"
+        style={{
+          paddingBottom: `calc(${NAV_BAND_PX}px + env(safe-area-inset-bottom))`,
+        }}
+      >
         <ExploreControls
           mode={journey.cameraMode}
           onModeChange={(mode) => dispatch({ type: 'SET_CAMERA_MODE', mode })}
           accentColor={theme.accent}
-        />
-        <EventNavigationBar
-          currentIndex={journey.eventIdx}
-          total={events.length}
-          currentLabel={event.label}
-          onPrevious={goPrevious}
-          onNext={goNext}
-          accentColor={theme.accent}
-          textColor={theme.title}
         />
       </div>
     </div>

@@ -2,11 +2,13 @@
 // Wedding Journey — Config Types
 // ============================================================
 
+/**
+ * Global settings. The journey itself — which zones each side visits and what
+ * they say — lives in `journey.ts`, not here.
+ */
 export interface WeddingConfig {
   couple: CoupleConfig;
   loader: LoaderConfig;
-  /** Each side carries its own full event list. */
-  sides: Record<Side, SideConfig>;
   guestForm: GuestFormConfig;
   car: CarConfig;
   people: PeopleConfig;
@@ -14,29 +16,11 @@ export interface WeddingConfig {
   performance: PerformanceConfig;
 }
 
-export type Side = 'groom' | 'bride';
-
-export interface SideConfig {
-  id: Side;
-  /** Full label, e.g. "Groom's Side". */
-  label: string;
-  /** Button label, e.g. "Groom". */
-  shortLabel: string;
-  /** Glyph or emoji shown on the choice card. */
-  icon: string;
-  /** One-liner under the choice card. */
-  blurb: string;
-  /** Whose family is hosting, shown once the side is picked. */
-  host: string;
-  /** Accent colour for this side's choice card. */
-  accent: string;
-  /**
-   * This side's journey. Event `id`s must stay within the set the 3D world
-   * knows how to build — entrance | nikah | mehendi | reception — since the
-   * zone, lighting, sky and camera presets are keyed by id.
-   */
-  events: EventConfig[];
-}
+/**
+ * Which family a guest is here for. Sides are authored in `journey.ts`; this
+ * stays a plain string so adding a side needs no type change.
+ */
+export type Side = string;
 
 /** Copy for the guest sign-in modal. */
 export interface GuestFormConfig {

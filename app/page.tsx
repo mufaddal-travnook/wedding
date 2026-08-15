@@ -10,6 +10,7 @@ import { BrandHeader } from '@/app/components/ui/BrandHeader';
 import { ProgressDots } from '@/app/components/ui/ProgressDots';
 import { SoundToggle } from '@/app/components/ui/SoundToggle';
 import { JourneyOverlay } from '@/app/components/ui/JourneyOverlay';
+import { EventNavigationBar } from '@/app/components/ui/EventNavigationBar';
 import { DriveCaption } from '@/app/components/ui/DriveCaption';
 import { KeyboardNav } from '@/app/components/ui/KeyboardNav';
 import { AudioProvider, AudioController } from '@/app/components/audio/AudioEngine';
@@ -34,12 +35,16 @@ export default function Home() {
         <StartScreen />
         <NameModal />
         <BrandHeader />
-        <ProgressDots />
+        {/* <ProgressDots /> */}
         <SoundToggle />
         <DriveCaption />
 
-        {/* Details modal / gift box, explore controls and bottom navigation */}
+        {/* Details modal / gift box and explore controls */}
         <JourneyOverlay />
+
+        {/* Independent so it stays put while the modal opens and closes, and
+            remains visible while the car is driving. */}
+        <EventNavigationBar />
 
         <KeyboardNav />
       </AudioProvider>

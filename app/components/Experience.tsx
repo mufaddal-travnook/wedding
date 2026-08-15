@@ -49,8 +49,11 @@ export function Experience() {
 
   return (
     <>
-      <SceneFog eventId={currentEvent.id} />
-      <SceneLights eventId={currentEvent.id} eventZoneZ={currentEvent.zoneZ} />
+      {/* Atmosphere is keyed by ZONE, not stop id: presets describe a venue,
+          and several stops may share one. A stop with its own `lighting`
+          override still wins, since the preset lookup falls back to the zone. */}
+      <SceneFog eventId={currentEvent.zone} />
+      <SceneLights eventId={currentEvent.zone} eventZoneZ={currentEvent.zoneZ} />
       <Ground events={events} />
       <Road events={events} />
 
@@ -60,11 +63,11 @@ export function Experience() {
       {/* Per-zone atmosphere — renders both previous + current during driving for crossfade */}
       {journey.stage === 'driving' && journey.previousEventIdx !== journey.eventIdx && (
         <SkyAtmosphere
-          eventId={events[journey.previousEventIdx].id}
+          eventId={events[journey.previousEventIdx].zone}
           zoneZ={events[journey.previousEventIdx].zoneZ}
         />
       )}
-      <SkyAtmosphere eventId={currentEvent.id} zoneZ={currentEvent.zoneZ} />
+      <SkyAtmosphere eventId={currentEvent.zone} zoneZ={currentEvent.zoneZ} />
 
       {/* Zone buildings, decorations, characters */}
       <ZoneLoader events={events} currentIdx={journey.eventIdx} />

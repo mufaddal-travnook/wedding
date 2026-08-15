@@ -1,89 +1,109 @@
 'use client';
 
-export interface EventNavigationBarProps {
-  /** Zero-based index of the current event. */
-  currentIndex: number;
-  /** Total number of events in this side's journey. */
-  total: number;
-  /** Label of the current event, shown between the two actions. */
-  currentLabel?: string;
-  onPrevious: () => void;
-  onNext: () => void;
-  /** Themed accent, normally the current event's accent colour. */
-  accentColor: string;
-  /** Themed text colour for labels. */
-  textColor?: string;
-  /** Blocks both actions, e.g. while the car is already driving. */
-  disabled?: boolean;
-}
+import { useCallback } from 'react';
+import { useJourney } from '@/app/lib/hooks/useJourneyState';
+import { useEvents } from '@/app/lib/hooks/useSideConfig';
+import { driveTo } from '@/app/lib/journey-bridge';
 
 /**
- * Standalone navigation, anchored at the very bottom of the viewport. It is a
- * sibling of the event details modal, never a child of it, so the modal can
- * open and close without affecting the guest's ability to move between events.
+ * Journey navigation, pinned to the very bottom of the viewport.
+ *
+ * Mounted independently in `page.tsx` — NOT inside JourneyOverlay — so it
+ * stays visible while the details modal opens and closes, and survives the
+ * overlay unmounting during driving. It reads journey state itself.
+ *
+ * Owns the bottom band of the screen. ExploreControls stacks above it; the
+ * overlay reserves NAV_BAND_PX so the two never collide.
  */
-export function EventNavigationBar({
-  currentIndex,
-  total,
-  currentLabel,
-  onPrevious,
-  onNext,
-  accentColor,
-  textColor = '#ffffff',
-  disabled = false,
-}: EventNavigationBarProps) {
-  const atStart = currentIndex <= 0;
-  const atEnd = currentIndex >= total - 1;
 
-  const buttonClass =
-    'pointer-events-auto flex items-center gap-2 rounded-full border px-4 py-2 text-[10px] uppercase tracking-[0.18em] backdrop-blur-md transition-all duration-300 enabled:hover:-translate-y-0.5 disabled:cursor-default disabled:opacity-25 focus-visible:outline-2 focus-visible:outline-offset-2 sm:px-6 sm:py-2.5 sm:text-[11px] sm:tracking-[0.24em]';
+/**
+ * Height this bar reserves at the bottom of the screen, excluding the safe
+ * area inset. JourneyOverlay pads its bottom stack by this much.
+ */
+export const NAV_BAND_PX = 92;
 
-  const buttonStyle = {
-    borderColor: `${accentColor}66`,
-    background: 'rgba(0,0,0,0.38)',
-    color: textColor,
-    outlineColor: accentColor,
-  };
+export function EventNavigationBar() {
+  const journey = useJourney();
+  const events = useEvents();
+
+  const { eventIdx, stage } = journey;
+  const event = events[eventIdx];
+
+  const atStart = eventIdx <= 0;
+  const atEnd = eventIdx >= events.length - 1;
+  // The car is already moving; let it arrive before accepting another move.
+  const disabled = stage === 'driving';
+
+  const goPrevious = useCallback(() => {
+    if (eventIdx > 0) driveTo(eventIdx - 1);
+  }, [eventIdx]);
+
+  const goNext = useCallback(() => {
+    if (eventIdx < events.length - 1) driveTo(eventIdx + 1);
+  }, [eventIdx, events.length]);
+
+  if ((stage !== 'event' && stage !== 'driving') || !event) return null;
+
+  const button =
+    'pointer-events-auto group flex items-center gap-2 rounded-full px-5 py-2.5 ' +
+    'text-[11px] font-bold uppercase tracking-[0.2em] text-white ' +
+    'border border-white/25 bg-white/[0.08] backdrop-blur-xl ' +
+    'shadow-[0_8px_28px_-6px_rgba(0,0,0,0.7)] [text-shadow:0_1px_6px_rgba(0,0,0,0.5)] ' +
+    'transition-all duration-300 ' +
+    'enabled:hover:bg-white/[0.18] enabled:hover:border-white/45 enabled:hover:-translate-y-0.5 ' +
+    'enabled:active:translate-y-0 ' +
+    'disabled:pointer-events-none disabled:opacity-0 ' +
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/80 ' +
+    'sm:px-6 sm:py-3 sm:text-[12px] sm:tracking-[0.24em]';
 
   return (
     <nav
       aria-label="Event navigation"
-      className="pointer-events-none flex items-center justify-between gap-3 sm:justify-center sm:gap-8"
+      className={`pointer-events-none fixed inset-x-0 bottom-0 z-[10] flex items-center justify-between gap-3
+        px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-12
+        transition-opacity duration-500 sm:justify-center sm:gap-10 sm:px-8
+        ${disabled ? 'opacity-40' : 'opacity-100'}`}
+      // Scrim so white type stays legible over a bright sky or pale ground.
+      style={{
+        background:
+          'linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.28) 50%, transparent 100%)',
+      }}
     >
       <button
         type="button"
         data-nav="prev"
-        onClick={onPrevious}
+        onClick={goPrevious}
         disabled={disabled || atStart}
         aria-label="Previous event"
-        className={buttonClass}
-        style={buttonStyle}
+        className={button}
       >
-        <span aria-hidden>←</span>
-        <span className="max-[380px]:sr-only">Previous</span>
+        <span aria-hidden className="transition-transform duration-300 group-hover:-translate-x-0.5">
+          ←
+        </span>
+        <span className="max-[380px]:sr-only">Prev</span>
       </button>
 
-      <p
-        className="pointer-events-none text-center text-[10px] tracking-[0.2em] sm:text-[11px]"
-        style={{ color: textColor }}
-      >
-        {currentLabel && <span className="mr-2 opacity-80">{currentLabel}</span>}
-        <span className="tabular-nums opacity-55">
-          {Math.min(currentIndex + 1, total)} / {total}
+      <p className="pointer-events-none flex flex-col items-center gap-0.5 text-center [text-shadow:0_2px_10px_rgba(0,0,0,0.75)]">
+        <span className="text-[12px] font-bold uppercase tracking-[0.26em] text-white sm:text-[13px]">
+          {event.label}
+        </span>
+        <span className="text-[10px] font-semibold tabular-nums tracking-[0.18em] text-white/60">
+          {Math.min(eventIdx + 1, events.length)}&thinsp;/&thinsp;{events.length}
         </span>
       </p>
 
       <button
         type="button"
         data-nav="next"
-        onClick={onNext}
+        onClick={goNext}
         disabled={disabled || atEnd}
         aria-label="Next event"
-        className={buttonClass}
-        style={buttonStyle}
+        className={button}
       >
         <span className="max-[380px]:sr-only">Next</span>
-        <span aria-hidden>→</span>
+        <span aria-hidden className="transition-transform duration-300 group-hover:translate-x-0.5">
+          →
+        </span>
       </button>
     </nav>
   );

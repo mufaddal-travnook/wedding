@@ -1,33 +1,29 @@
-import { Entrance } from './Entrance';
-import { Nikah } from './Nikah';
-import { Mehendi } from './Mehendi';
-import { Reception } from './Reception';
-import type { EventConfig } from '@/app/config/types';
+import { getZone, isZoneKind } from '@/app/config/zone-registry';
+import type { ResolvedEvent } from '@/app/config/resolve-journey';
 
 interface ZoneLoaderProps {
-  events: EventConfig[];
+  events: ResolvedEvent[];
   currentIdx: number;
 }
 
-const ZONE_COMPONENTS: Record<string, React.ComponentType<{ zoneZ: number }>> = {
-  entrance: Entrance,
-  nikah: Nikah,
-  mehendi: Mehendi,
-  reception: Reception,
-};
-
+/**
+ * Builds the 3D scene for the current stop and its immediate neighbours.
+ *
+ * Scenes are looked up by `zone`, not by `id`, so several stops can reuse one
+ * venue — two Mehendi nights render the same scene with different copy.
+ */
 export function ZoneLoader({ events, currentIdx }: ZoneLoaderProps) {
   return (
     <>
       {events.map((event, i) => {
-        const Component = ZONE_COMPONENTS[event.id];
-        if (!Component) return null;
+        // Only render the current zone + adjacent ones, for performance.
+        if (Math.abs(i - currentIdx) > 1) return null;
+        if (!isZoneKind(event.zone)) return null;
 
-        // Only render current zone + adjacent zones for performance
-        const distance = Math.abs(i - currentIdx);
-        if (distance > 1) return null;
-
-        return <Component key={event.id} zoneZ={event.zoneZ} />;
+        const Zone = getZone(event.zone).component;
+        // Keyed by stop id, not zone: two stops sharing a venue must stay
+        // separate instances, or React would reuse one and skip the second.
+        return <Zone key={event.id} zoneZ={event.zoneZ} />;
       })}
     </>
   );
