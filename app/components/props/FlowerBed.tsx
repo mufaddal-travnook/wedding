@@ -56,7 +56,11 @@ export function FlowerBed({
     <group position={position}>
       <instancedMesh ref={meshRef} args={[undefined, undefined, count]} frustumCulled={false}>
         <sphereGeometry args={[1, 6, 6]} />
-        <meshStandardMaterial color="#ffffff" vertexColors roughness={0.6} />
+        {/* No `vertexColors` — per-flower tint comes from setColorAt (instance
+            colors), which three.js applies on top of this base color. Enabling
+            vertexColors makes the shader read a vertex `color` attribute that
+            this geometry doesn't have, rendering every flower black. */}
+        <meshStandardMaterial color="#ffffff" roughness={0.6} />
       </instancedMesh>
     </group>
   );

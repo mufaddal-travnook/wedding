@@ -83,7 +83,8 @@ export function Wildflowers({
 
   const geo = useMemo(() => new SphereGeometry(1, 6, 6), []);
   const mat = useMemo(
-    () => new MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.6 }),
+    // Per-instance tint comes from setColorAt, not a vertex attribute — see FlowerBed.
+    () => new MeshStandardMaterial({ color: '#ffffff', roughness: 0.6 }),
     []
   );
 

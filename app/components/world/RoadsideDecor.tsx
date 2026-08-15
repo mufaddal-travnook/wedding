@@ -1,162 +1,266 @@
 import { useMemo } from 'react';
 import { Tree } from '../props/Tree';
-import { Palm } from '../props/Palm';
-import { Flower } from '../props/Flower';
-import { Lantern } from '../props/Lantern';
+import { Palm2 } from '../props/Palm2';
+import { Shrub } from '../props/Shrub';
+import { Canopy, CANOPY_RADIUS } from '../props/Canopy';
+import { LightPole } from '../props/LightPole';
+import { BanquetTable } from '../props/BanquetTable';
+import { GuestCluster } from '../props/GuestCluster';
+import { rand } from '@/app/lib/seeded-random';
+import {
+  scatterBackground,
+  scatterInView,
+  BG_NEAR,
+  BG_FAR,
+  type ScatterBounds,
+} from '@/app/lib/background-scatter';
 import type { EventConfig } from '@/app/config/types';
 
-// Street lamp pole with glowing light
-function StreetLamp({ position }: { position: [number, number, number] }) {
-  return (
-    <group position={position}>
-      {/* Pole */}
-      <mesh position={[0, 2.4, 0]}>
-        <cylinderGeometry args={[0.08, 0.12, 4.8, 6]} />
-        <meshStandardMaterial color="#3a3a4a" roughness={0.7} metalness={0.3} />
-      </mesh>
-      {/* Arm */}
-      <mesh position={[0.4, 4.6, 0]} rotation={[0, 0, -0.3]}>
-        <cylinderGeometry args={[0.04, 0.04, 1.0, 5]} />
-        <meshStandardMaterial color="#3a3a4a" roughness={0.7} metalness={0.3} />
-      </mesh>
-      {/* Lamp housing */}
-      <mesh position={[0.7, 4.7, 0]}>
-        <cylinderGeometry args={[0.2, 0.15, 0.3, 8]} />
-        <meshStandardMaterial color="#2a2a3a" roughness={0.6} metalness={0.4} />
-      </mesh>
-      {/* Light bulb glow */}
-      <mesh position={[0.7, 4.5, 0]}>
-        <sphereGeometry args={[0.18, 8, 8]} />
-        <meshStandardMaterial
-          color="#ffeedd"
-          emissive="#ffcc88"
-          emissiveIntensity={2.0}
-          transparent
-          opacity={0.9}
-        />
-      </mesh>
-      {/* Light cone on ground */}
-      <pointLight position={[0.7, 4.4, 0]} color="#ffddaa" intensity={3} distance={12} decay={2} />
-    </group>
-  );
-}
+/**
+ * RoadsideDecor — the wedding happening in the BACKGROUND, away from the road.
+ *
+ * The road and the avenue of trees at x=±6 belong to the zone components (see
+ * Entrance.tsx). This module only fills the landscape beyond them, so the
+ * distance reads as a celebration in progress.
+ *
+ * Individual props live in `../props`; placement maths lives in
+ * `@/app/lib/background-scatter`. What remains here is composition: which
+ * layers exist, how dense each is, and which ones get the expensive extras
+ * (real lights, idle animation).
+ */
+
+/** Foliage tint shifts darker as the journey nears the evening reception. */
+const LEAF_COLORS = { near: '#5f9463', mid: '#4f9440', far: '#2b4d33' };
+
+/** Only this many units either side of the guest get real lights / animation. */
+const LIT_RANGE_Z = 30;
+const ANIMATE_RANGE_Z = 55;
+const ANIMATE_RANGE_X = 26;
 
 interface RoadsideDecorProps {
   events: EventConfig[];
+  /** Zone the guest is at — gates the per-frame and per-light costs. */
+  currentZoneZ?: number;
 }
 
-export function RoadsideDecor({ events }: RoadsideDecorProps) {
+export function RoadsideDecor({ events, currentZoneZ = 0 }: RoadsideDecorProps) {
+  const firstZ = events[0].zoneZ;
   const lastZ = events[events.length - 1].zoneZ;
 
-  // Generate tree positions along the road
-  const trees = useMemo(() => {
-    const arr: { x: number; z: number; scale: number; type: 'tree' | 'palm'; leafColor: string }[] = [];
-    const seed = 42;
-    for (let z = 15; z > lastZ - 15; z -= 14 + Math.sin(z * 0.1 + seed) * 4) {
-      // Left side
-      arr.push({
-        x: -8 - Math.abs(Math.sin(z * 0.3)) * 6,
-        z,
-        scale: 0.8 + Math.abs(Math.sin(z * 0.7)) * 0.6,
-        type: Math.sin(z * 0.5) > 0.3 ? 'palm' : 'tree',
-        leafColor: z > events[2]?.zoneZ ? '#5f9463' : z > events[3]?.zoneZ ? '#4f9440' : '#2b4d33',
-      });
-      // Right side (offset so not symmetric)
-      if (Math.sin(z * 0.4 + 1.7) > -0.3) {
-        arr.push({
-          x: 8 + Math.abs(Math.cos(z * 0.3)) * 6,
-          z: z + 3,
-          scale: 0.7 + Math.abs(Math.cos(z * 0.5)) * 0.5,
-          type: Math.cos(z * 0.6) > 0.2 ? 'palm' : 'tree',
-          leafColor: z > events[2]?.zoneZ ? '#5f9463' : z > events[3]?.zoneZ ? '#4f9440' : '#2b4d33',
-        });
+  /** Each zone camera in world space, for both framing and exclusion. */
+  const cameras = useMemo(
+    () =>
+      events.map((e) => ({
+        x: e.camera.position[0],
+        z: e.zoneZ + e.camera.position[2],
+        lookX: e.camera.lookAt[0],
+        lookZ: e.zoneZ + e.camera.lookAt[2],
+      })),
+    [events],
+  );
+
+  /**
+   * Reject anything close enough to a camera to loom over the subject.
+   * Distant scenery is meant to be seen, so this is a small bubble rather
+   * than a full sightline exclusion.
+   */
+  const bounds = useMemo<ScatterBounds>(
+    () => ({
+      fromZ: firstZ + 30,
+      toZ: lastZ - 40,
+      isBlocked: (x, z, radius) =>
+        cameras.some((c) => Math.hypot(x - c.x, z - c.z) < 13 + radius),
+    }),
+    [firstZ, lastZ, cameras],
+  );
+
+  const leafFor = (z: number) =>
+    z > (events[2]?.zoneZ ?? -170)
+      ? LEAF_COLORS.near
+      : z > (events[3]?.zoneZ ?? -255)
+        ? LEAF_COLORS.mid
+        : LEAF_COLORS.far;
+
+  // ===== Deep tree line — fills the horizon behind everything =====
+  const forest = useMemo(
+    () =>
+      scatterBackground(bounds, {
+        stepZ: 9,
+        salt: 7,
+        keep: 0.85,
+        near: BG_NEAR + 12,
+        far: BG_FAR,
+      }).map((p) => ({
+        ...p,
+        scale: 1.8 + rand(p.seed, 4) * 1.6,
+        isPalm: rand(p.seed, 5) > 0.5,
+        leafColor: leafFor(p.z),
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bounds, events],
+  );
+
+  // ===== Shrub clumps through the mid-ground =====
+  const shrubs = useMemo(
+    () =>
+      scatterBackground(bounds, {
+        stepZ: 7,
+        salt: 13,
+        keep: 0.7,
+        near: BG_NEAR,
+        far: BG_FAR - 14,
+      }).map((p) => ({
+        ...p,
+        scale: 0.5 + rand(p.seed, 6) * 0.9,
+        color: ['#5f9463', '#6fae3a', '#4f8a40', '#57a05a'][Math.floor(rand(p.seed, 7) * 4)],
+        // A few flowering bushes lift the palette near the venues.
+        blossom: rand(p.seed, 8) > 0.78 ? '#f3c6c9' : undefined,
+      })),
+    [bounds],
+  );
+
+  /**
+   * Canopies are the clearest "a function is happening here" silhouette, so
+   * they are aimed into each zone camera's view cone rather than scattered
+   * blindly — blind scatter put them behind the camera, where they cost
+   * geometry and were never seen.
+   */
+  const canopies = useMemo(
+    () =>
+      scatterInView(cameras, {
+        forward: [13, 21],
+        lateral: [-17, -11, 11, 17],
+        minAbsX: BG_NEAR,
+        radius: CANOPY_RADIUS * 1.6,
+        isBlocked: bounds.isBlocked,
+        salt: 19,
+      }).map((p) => ({
+        ...p,
+        scale: 1.0 + rand(p.seed, 8) * 0.6,
+        rotation: rand(p.seed, 9) * Math.PI,
+        color: rand(p.seed, 10) > 0.5 ? '#fdf8f2' : '#f7ead6',
+      })),
+    [cameras, bounds],
+  );
+
+  /**
+   * Crowds are the most expensive layer — each guest is ~20 meshes. Kept
+   * sparse and clamped to the near background, where they actually read.
+   */
+  const banquets = useMemo(
+    () =>
+      scatterBackground(bounds, {
+        stepZ: 30,
+        salt: 23,
+        keep: 0.62,
+        near: BG_NEAR + 2,
+        far: BG_NEAR + 15,
+        radius: 2.5,
+      }),
+    [bounds],
+  );
+
+  const clusters = useMemo(
+    () =>
+      scatterBackground(bounds, {
+        stepZ: 26,
+        salt: 31,
+        keep: 0.65,
+        near: BG_NEAR + 1,
+        far: BG_NEAR + 17,
+        radius: 2,
+      }),
+    [bounds],
+  );
+
+  // ===== Light poles dotted through the background =====
+  const poles = useMemo(
+    () =>
+      scatterBackground(bounds, {
+        stepZ: 19,
+        salt: 37,
+        keep: 0.8,
+        near: BG_NEAR,
+        far: BG_NEAR + 26,
+        radius: 1.5,
+      }).map((p) => ({ ...p, height: 4.2 + rand(p.seed, 12) * 1.8 })),
+    [bounds],
+  );
+
+  const isNear = (z: number, range: number) => Math.abs(z - currentZoneZ) < range;
+
+  /** The one canopy allowed a real light — whichever is closest to the guest. */
+  const nearestCanopyZ = useMemo(() => {
+    let best: number | null = null;
+    for (const c of canopies) {
+      if (best === null || Math.abs(c.z - currentZoneZ) < Math.abs(best - currentZoneZ)) {
+        best = c.z;
       }
     }
-    return arr;
-  }, [lastZ, events]);
-
-  // Roadside flowers (small clusters near the road edge)
-  const flowers = useMemo(() => {
-    const arr: { x: number; z: number; color: string; scale: number }[] = [];
-    const colors = ['#f05a8e', '#f5a623', '#fdf8f2', '#e86fb0', '#ffe27a'];
-    for (let z = 10; z > lastZ - 10; z -= 6 + Math.random() * 4) {
-      const side = Math.sin(z * 1.3) > 0 ? -1 : 1;
-      arr.push({
-        x: side * (3.8 + Math.abs(Math.sin(z * 0.8)) * 2),
-        z,
-        color: colors[Math.abs(Math.floor(Math.sin(z * 2.1) * colors.length)) % colors.length],
-        scale: 0.7 + Math.abs(Math.sin(z * 1.5)) * 0.7,
-      });
-    }
-    return arr;
-  }, [lastZ]);
-
-  // Floating lanterns per zone
-  const lanterns = useMemo(() => {
-    const arr: { x: number; y: number; z: number; color: string }[] = [];
-    events.forEach((event) => {
-      const colors: Record<string, string> = {
-        entrance: '#ffd9a0',
-        nikah: '#fff0cf',
-        mehendi: '#fff0a0',
-        reception: '#aabbff',
-      };
-      const c = colors[event.id] || '#ffd9a0';
-      const count = event.id === 'reception' ? 6 : 8;
-      for (let i = 0; i < count; i++) {
-        arr.push({
-          x: (Math.sin(i * 2.7 + event.zoneZ * 0.1) * 0.5 + 0.5) * 30 - 15,
-          y: 4 + Math.sin(i * 1.3) * 3 + 2,
-          z: event.zoneZ + (Math.cos(i * 1.8) * 0.5 + 0.5) * 20 - 10,
-          color: c,
-        });
-      }
-    });
-    return arr;
-  }, [events]);
-
-  // Street lamps for reception zone (and slightly before it)
-  const streetLamps = useMemo(() => {
-    const receptionZ = events[events.length - 1]?.zoneZ ?? -255;
-    const arr: { x: number; z: number }[] = [];
-    // Place lamps along the road approaching reception
-    for (let z = receptionZ + 40; z > receptionZ - 20; z -= 12) {
-      arr.push({ x: -4.5, z });
-      arr.push({ x: 4.5, z });
-    }
-    // Also a few in the mehendi-to-reception transition
-    const mehendiZ = events[2]?.zoneZ ?? -170;
-    for (let z = mehendiZ - 20; z > receptionZ + 40; z -= 18) {
-      arr.push({ x: -4.5, z });
-      arr.push({ x: 4.5, z });
-    }
-    return arr;
-  }, [events]);
+    return best;
+  }, [canopies, currentZoneZ]);
 
   return (
     <group>
-      {/* Trees */}
-      {trees.map((t, i) =>
-        t.type === 'palm' ? (
-          <Palm key={`t${i}`} position={[t.x, 0, t.z]} scale={t.scale} />
+      {/* Deep tree line on the horizon */}
+      {forest.map((t, i) =>
+        t.isPalm ? (
+          <Palm2 key={`f${i}`} position={[t.x, 0, t.z]} scale={t.scale} />
         ) : (
-          <Tree key={`t${i}`} position={[t.x, 0, t.z]} scale={t.scale} leafColor={t.leafColor} />
-        )
+          <Tree key={`f${i}`} position={[t.x, 0, t.z]} scale={t.scale} leafColor={t.leafColor} />
+        ),
       )}
 
-      {/* Roadside flowers */}
-      {flowers.map((f, i) => (
-        <Flower key={`f${i}`} position={[f.x, 0.12, f.z]} color={f.color} scale={f.scale} />
+      {/* Shrub clumps */}
+      {shrubs.map((s, i) => (
+        <Shrub
+          key={`s${i}`}
+          position={[s.x, 0, s.z]}
+          scale={s.scale}
+          color={s.color}
+          blossomColor={s.blossom}
+          seed={s.seed}
+        />
       ))}
 
-      {/* Floating lanterns */}
-      {lanterns.map((l, i) => (
-        <Lantern key={`l${i}`} position={[l.x, l.y, l.z]} color={l.color} size={0.25} />
+      {/* Canopy pavilions, aimed into frame */}
+      {canopies.map((c, i) => (
+        <Canopy
+          key={`cp${i}`}
+          position={[c.x, 0, c.z]}
+          scale={c.scale}
+          rotation={c.rotation}
+          color={c.color}
+          // Glow adds a real pointLight, and several canopies can be near the
+          // guest at once. Only the single closest one gets it; the rest keep
+          // their emissive finial, which costs nothing.
+          glow={c.z === nearestCanopyZ}
+        />
       ))}
 
-      {/* Street lamps for reception */}
-      {streetLamps.map((s, i) => (
-        <StreetLamp key={`sl${i}`} position={[s.x, 0, s.z]} />
+      {/* Banquet tables with seated guests */}
+      {banquets.map((b, i) => (
+        <BanquetTable key={`b${i}`} position={[b.x, 0, b.z]} seed={b.seed} />
+      ))}
+
+      {/* Standing groups talking */}
+      {clusters.map((c, i) => (
+        <GuestCluster
+          key={`g${i}`}
+          position={[c.x, 0, c.z]}
+          seed={c.seed}
+          animate={Math.abs(c.x) < ANIMATE_RANGE_X && isNear(c.z, ANIMATE_RANGE_Z)}
+        />
+      ))}
+
+      {/* Warm light poles */}
+      {poles.map((p, i) => (
+        <LightPole
+          key={`p${i}`}
+          position={[p.x, 0, p.z]}
+          height={p.height}
+          lit={isNear(p.z, LIT_RANGE_Z) && Math.abs(p.x) < ANIMATE_RANGE_X}
+        />
       ))}
     </group>
   );

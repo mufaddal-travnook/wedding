@@ -1,5 +1,13 @@
 import { useMemo } from 'react';
-import { CanvasTexture, RepeatWrapping, CircleGeometry, Color, Float32BufferAttribute } from 'three';
+import {
+  CanvasTexture,
+  RepeatWrapping,
+  PlaneGeometry,
+  Color,
+  Float32BufferAttribute,
+  LinearMipmapLinearFilter,
+  LinearFilter,
+} from 'three';
 import type { EventConfig } from '@/app/config/types';
 
 const GROUND_PALETTES: Record<string, {
@@ -80,31 +88,89 @@ function generateGrassTexture(palette: typeof GROUND_PALETTES.entrance): CanvasT
   const tex = new CanvasTexture(cv);
   tex.wrapS = RepeatWrapping;
   tex.wrapT = RepeatWrapping;
-  tex.repeat.set(12, 12);
-  tex.anisotropy = 4;
+  // Square-ish tiles across a very long plane: one tile per ~14 world units.
+  // Mipmaps + high anisotropy stop the fine blade strokes from shimmering
+  // when the ground is viewed at a grazing angle.
+  tex.repeat.set(16, 44);
+  tex.anisotropy = 16;
+  tex.generateMipmaps = true;
+  tex.minFilter = LinearMipmapLinearFilter;
+  tex.magFilter = LinearFilter;
   return tex;
 }
 
-function createGroundGeometry(radius: number, palette: typeof GROUND_PALETTES.entrance) {
-  const geo = new CircleGeometry(radius, 48);
+/**
+ * One continuous ground plane spanning the whole journey.
+ *
+ * The previous version placed a 70-unit disc per zone at the same y, so
+ * neighbouring discs overlapped and z-fought — that was the flicker. A single
+ * plane can't overlap itself, so the ground is now uniform and stable.
+ *
+ * Zone identity is preserved by blending each zone's palette into the vertex
+ * colors along Z, giving a smooth transition between zones instead of a hard
+ * seam where two discs met.
+ */
+function createGroundGeometry(
+  width: number,
+  fromZ: number,
+  toZ: number,
+  zones: { zoneZ: number; palette: typeof GROUND_PALETTES.entrance }[],
+) {
+  const length = fromZ - toZ;
+  // Enough segments along Z that palette blending reads as a gradient.
+  const geo = new PlaneGeometry(width, length, 32, Math.max(64, Math.ceil(length / 6)));
   geo.rotateX(-Math.PI / 2);
+  geo.translate(0, 0, (fromZ + toZ) / 2);
+
+  const toColor = (c: [number, number, number]) => new Color(`rgb(${c.join(',')})`);
+  const stops = zones.map((z) => ({
+    z: z.zoneZ,
+    base: toColor(z.palette.base),
+    dark: toColor(z.palette.dark),
+    light: toColor(z.palette.light),
+  }));
 
   const pos = geo.attributes.position;
-  const base = new Color(`rgb(${palette.base.join(',')})`);
-  const dark = new Color(`rgb(${palette.dark.join(',')})`);
-  const light = new Color(`rgb(${palette.light.join(',')})`);
   const colors = new Float32Array(pos.count * 3);
+  const c = new Color();
 
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const z = pos.getZ(i);
-    const dist = Math.sqrt(x * x + z * z) / radius;
 
-    // Smooth noise-based variation
+    // Find the two zone stops this vertex sits between and blend their
+    // palettes. Zones run front-to-back, so stop z values descend.
+    const last = stops[stops.length - 1];
+    let a = stops[0];
+    let b = stops[0];
+    if (z <= last.z) {
+      // Past the final zone — hold its palette flat.
+      a = b = last;
+    } else {
+      for (let s = 0; s < stops.length - 1; s++) {
+        if (z <= stops[s].z && z >= stops[s + 1].z) {
+          a = stops[s];
+          b = stops[s + 1];
+          break;
+        }
+      }
+    }
+    const span = a.z - b.z;
+    // Smoothstep so zones ease into each other rather than ramping linearly.
+    const raw = span > 0 ? Math.min(1, Math.max(0, (a.z - z) / span)) : 0;
+    const k = raw * raw * (3 - 2 * raw);
+
+    c.copy(a.base).lerp(b.base, k);
+    const lightC = a.light.clone().lerp(b.light, k);
+    const darkC = a.dark.clone().lerp(b.dark, k);
+
+    // Smooth noise-based variation, same character as before.
     const noise = Math.sin(x * 0.1 + 1.7) * Math.cos(z * 0.1) * 0.5 + 0.5;
-    const c = base.clone().lerp(noise > 0.55 ? light : dark, noise * 0.25);
-    // Edge darkening
-    c.multiplyScalar(0.9 + (1 - dist) * 0.1);
+    c.lerp(noise > 0.55 ? lightC : darkC, noise * 0.25);
+
+    // Darken toward the far left/right edges so the plane fades out.
+    const edge = Math.min(1, Math.abs(x) / (width / 2));
+    c.multiplyScalar(1 - edge * edge * 0.18);
 
     colors[i * 3] = c.r;
     colors[i * 3 + 1] = c.g;
@@ -119,30 +185,32 @@ interface GroundProps {
 }
 
 export function Ground({ events }: GroundProps) {
-  const grounds = useMemo(() => {
-    if (typeof document === 'undefined') return [];
-    return events.map((event) => {
-      const palette = GROUND_PALETTES[event.id] ?? GROUND_PALETTES.entrance;
-      return {
-        id: event.id,
-        zoneZ: event.zoneZ,
-        geo: createGroundGeometry(70, palette),
-        tex: generateGrassTexture(palette),
-      };
-    });
+  const ground = useMemo(() => {
+    if (typeof document === 'undefined') return null;
+
+    const zones = events.map((event) => ({
+      zoneZ: event.zoneZ,
+      palette: GROUND_PALETTES[event.id] ?? GROUND_PALETTES.entrance,
+    }));
+
+    // Extend well past the first and last zones so the plane never ends in view.
+    const fromZ = zones[0].zoneZ + 90;
+    const toZ = zones[zones.length - 1].zoneZ - 90;
+
+    return {
+      geo: createGroundGeometry(220, fromZ, toZ, zones),
+      // The texture is a detail overlay; zone color comes from vertex colors.
+      tex: generateGrassTexture(GROUND_PALETTES.entrance),
+    };
   }, [events]);
 
+  if (!ground) return null;
+
+  // y=-0.12 sits clearly below the road shoulder (underside at y=-0.06) so the
+  // two surfaces never z-fight where the road crosses the ground.
   return (
-    <group>
-      {grounds.map((g) => (
-        <mesh key={g.id} geometry={g.geo} position={[0, -0.02, g.zoneZ]} receiveShadow>
-          <meshStandardMaterial
-            map={g.tex}
-            vertexColors
-            roughness={0.92}
-          />
-        </mesh>
-      ))}
-    </group>
+    <mesh geometry={ground.geo} position={[0, -0.12, 0]} receiveShadow>
+      <meshStandardMaterial map={ground.tex} vertexColors roughness={0.92} />
+    </mesh>
   );
 }

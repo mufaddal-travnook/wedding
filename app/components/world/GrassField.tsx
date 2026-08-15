@@ -138,10 +138,10 @@ export function GrassField({
   }, [height]);
 
   const mat = useMemo(
+    // Per-blade tint comes from setColorAt, not a vertex attribute — see FlowerBed.
     () => new MeshStandardMaterial({
       color: '#ffffff',
       side: DoubleSide,
-      vertexColors: true,
       roughness: 0.8,
     }),
     []

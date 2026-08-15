@@ -2,8 +2,12 @@ import type { CameraPreset } from './types';
 
 export const CAMERA_VIEWS: Record<string, CameraPreset> = {
   entrance: {
-    position: [10, 5.5, 18],    // closer, lower — gate fills frame
-    lookAt: [0, 3, 2],
+    // Pulled back and raised so the full gate arch (7.8 tall) and the car both
+    // sit in frame. Looking at z=6 — between the car (z=9) and the gate
+    // (z=6.5) — keeps the car in the foreground and the gate right behind it,
+    // instead of aiming past the car at empty road.
+    position: [9, 6, 20],
+    lookAt: [0, 3.2, 6],
     flyDuration: 2400,
   },
   nikah: {

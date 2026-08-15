@@ -55,7 +55,7 @@ export function Experience() {
       <Road events={events} />
 
       {/* Trees, flowers, lanterns, street lamps along the road */}
-      <RoadsideDecor events={events} />
+      <RoadsideDecor events={events} currentZoneZ={currentEvent.zoneZ} />
 
       {/* Per-zone atmosphere — renders both previous + current during driving for crossfade */}
       {journey.stage === 'driving' && journey.previousEventIdx !== journey.eventIdx && (
