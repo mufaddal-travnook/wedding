@@ -1,6 +1,8 @@
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
+import type { NormalOrGLBufferAttributes } from 'three';
 import { Points, BufferGeometry, Float32BufferAttribute, PointsMaterial, AdditiveBlending, Color } from 'three';
+import { useDisposableSet } from '@/app/lib/use-disposable';
 
 const COLORS = ['#ffd27a', '#f05a8e', '#9ecbff', '#9ed64f', '#e8b0ff'];
 const PARTICLE_COUNT = 60;
@@ -22,7 +24,9 @@ interface FireworksProps {
 }
 
 export function Fireworks({ zoneZ, enabled = true }: FireworksProps) {
-  const groupRef = useRef<(Points | null)[]>([]);
+  // R3F hands back Points typed with its looser buffer-attribute generic, so
+  // the ref is widened to match rather than narrowed with a cast.
+  const groupRef = useRef<(Points<BufferGeometry<NormalOrGLBufferAttributes>> | null)[]>([]);
   const burstsRef = useRef<Burst[]>(
     Array.from({ length: MAX_FIREWORKS }, () => ({
       active: false,
@@ -32,12 +36,48 @@ export function Fireworks({ zoneZ, enabled = true }: FireworksProps) {
       velocities: new Float32Array(PARTICLE_COUNT * 3),
     }))
   );
-  const timerRef = useRef(1 + Math.random() * 2);
+  /**
+   * Countdown to the next burst.
+   *
+   * Randomness is genuinely wanted here — fireworks should not fire on a
+   * metronome, and nothing about this is server-rendered — but the seed is
+   * drawn on first use rather than in the initialiser, so render itself stays
+   * pure.
+   */
+  const timerRef = useRef<number | null>(null);
+
+  /**
+   * The point clouds each burst writes into.
+   *
+   * These used to be constructed inside the render body, so every React
+   * render allocated four fresh BufferGeometries and orphaned the previous
+   * four. Three.js does not garbage-collect GPU memory — an orphaned geometry
+   * keeps its WebGL buffer until context loss — so the leak grew without
+   * bound over a session. Built once here, and disposed on unmount.
+   */
+  const { geometries } = useDisposableSet(
+    () => ({
+      geometries: Array.from({ length: MAX_FIREWORKS }, () => {
+        const geo = new BufferGeometry();
+        geo.setAttribute(
+          'position',
+          new Float32BufferAttribute(new Float32Array(PARTICLE_COUNT * 3), 3),
+        );
+        return geo;
+      }),
+    }),
+    [],
+  );
 
   useFrame((state, delta) => {
     if (!enabled) return;
 
-    // Spawn timer
+    // Spawn timer. Seeded on the first frame rather than during render, so
+    // render stays pure.
+    if (timerRef.current === null) {
+      timerRef.current = 1 + Math.random() * 2;
+    }
+
     timerRef.current -= delta;
     if (timerRef.current <= 0) {
       timerRef.current = 0.8 + Math.random() * 1.5;
@@ -73,7 +113,9 @@ export function Fireworks({ zoneZ, enabled = true }: FireworksProps) {
       }
 
       burst.life += delta;
-      const posAttr = pts.geometry.attributes.position;
+      // These geometries are built above with a Float32BufferAttribute, so the
+      // looser element-level attribute type is narrowed back here.
+      const posAttr = pts.geometry.attributes.position as Float32BufferAttribute;
 
       for (let i = 0; i < PARTICLE_COUNT; i++) {
         // Apply gravity
@@ -100,28 +142,22 @@ export function Fireworks({ zoneZ, enabled = true }: FireworksProps) {
 
   return (
     <group>
-      {Array.from({ length: MAX_FIREWORKS }).map((_, i) => {
-        const geo = new BufferGeometry();
-        const pos = new Float32Array(PARTICLE_COUNT * 3);
-        geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
-
-        return (
-          <points
-            key={i}
-            ref={(el: any) => { groupRef.current[i] = el; }}
-            geometry={geo}
-          >
-            <pointsMaterial
-              size={0.35}
-              transparent
-              opacity={0}
-              sizeAttenuation
-              blending={AdditiveBlending}
-              depthWrite={false}
-            />
-          </points>
-        );
-      })}
+      {geometries.map((geo, i) => (
+        <points
+          key={i}
+          ref={(el) => { groupRef.current[i] = el; }}
+          geometry={geo}
+        >
+          <pointsMaterial
+            size={0.35}
+            transparent
+            opacity={0}
+            sizeAttenuation
+            blending={AdditiveBlending}
+            depthWrite={false}
+          />
+        </points>
+      ))}
     </group>
   );
 }

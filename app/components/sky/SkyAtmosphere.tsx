@@ -1,34 +1,121 @@
-import { useRef, useMemo, useEffect } from 'react';
+'use client';
+
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import {
-  InstancedMesh, Object3D, Color,
-  PointsMaterial, BufferGeometry, Float32BufferAttribute,
-  Points, DoubleSide, AdditiveBlending,
+  AdditiveBlending,
+  BufferGeometry,
+  Color,
+  DoubleSide,
+  Float32BufferAttribute,
+  InstancedMesh,
+  MeshStandardMaterial,
+  Object3D,
+  PlaneGeometry,
+  Points,
+  PointsMaterial,
+  SphereGeometry,
 } from 'three';
+import { rand } from '@/app/lib/seeded-random';
+import { useDisposable } from '@/app/lib/use-disposable';
 
-// ============ TWINKLING STARS (Reception) ============
-export function StarField({ count = 400, radius = 130, zoneZ = 0 }: { count?: number; radius?: number; zoneZ?: number }) {
+/**
+ * Atmosphere — drifting motes, falling petals and stars.
+ *
+ * All motion here runs on the GPU.
+ *
+ * The previous version rebuilt every instance matrix on the CPU each frame:
+ * for each particle it set position/scale/rotation, called `updateMatrix()`
+ * (a full TRS compose, with trig for the Euler path), wrote 16 floats, then
+ * re-uploaded the whole instance buffer. Across the particle systems that was
+ * tens of thousands of matrix composes a second on the main thread, blocking
+ * input, to animate what is ultimately a sine wave.
+ *
+ * Instead the instance matrices are written ONCE — they hold each particle's
+ * home position and its animation parameters — and a small patch to the
+ * vertex shader displaces the vertices per frame. The per-frame CPU cost
+ * drops from O(N) to O(1): a single uniform write. Nothing is re-uploaded.
+ *
+ * Placement is seeded rather than `Math.random()`, so the sky is identical on
+ * server and client and does not reshuffle on re-render.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Shader plumbing
+ * ------------------------------------------------------------------ */
+
+interface TimeUniform {
+  value: number;
+}
+
+/**
+ * Patch a material's vertex shader with a time-driven displacement.
+ *
+ * Each particle's animation parameters travel in unused corners of its
+ * instance matrix, which every instanced draw already supplies — no extra
+ * attribute buffers, no extra uploads.
+ *
+ * `onBeforeCompile` runs once per material; the returned uniform is what the
+ * render loop pokes each frame.
+ */
+function patchMaterial(
+  mat: MeshStandardMaterial,
+  body: string,
+  constants: Record<string, number> = {},
+): TimeUniform {
+  const uTime: TimeUniform = { value: 0 };
+  const names = Object.keys(constants);
+  const declarations = ['uniform float uTime;', ...names.map((n) => `uniform float ${n};`)].join('\n');
+
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = uTime;
+    for (const n of names) shader.uniforms[n] = { value: constants[n] };
+
+    shader.vertexShader =
+      `${declarations}\n` +
+      shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n${body}`);
+  };
+  // Three caches compiled programs per material. Without a distinct key a
+  // patched material can be handed an unpatched program compiled earlier for
+  // the same parameters, and the animation silently stops.
+  const constantKey = names.map((n) => `${n}=${constants[n]}`).join(',');
+  mat.customProgramCacheKey = () => `${body}|${constantKey}`;
+
+  return uTime;
+}
+
+/* ------------------------------------------------------------------ *
+ * TWINKLING STARS (Reception)
+ * ------------------------------------------------------------------ */
+
+export function StarField({
+  count = 400,
+  radius = 130,
+  zoneZ = 0,
+}: {
+  count?: number;
+  radius?: number;
+  zoneZ?: number;
+}) {
   const pointsRef = useRef<Points>(null);
 
-  const { positions, sizes } = useMemo(() => {
+  /**
+   * Stars never move, so the geometry is built once and simply left alone.
+   * Only the material opacity breathes, which is a single scalar per frame.
+   */
+  const geo = useDisposable(() => {
     const pos = new Float32Array(count * 3);
-    const sz = new Float32Array(count);
     for (let i = 0; i < count; i++) {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.random() * Math.PI * 0.4;
+      const theta = rand(i, 1) * Math.PI * 2;
+      const phi = rand(i, 2) * Math.PI * 0.4;
       pos[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
       pos[i * 3 + 1] = radius * Math.cos(phi) + 15;
       pos[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta) + zoneZ;
-      sz[i] = 0.3 + Math.random() * 0.8;
     }
-    return { positions: pos, sizes: sz };
-  }, [count, radius, zoneZ]);
-
-  const geo = useMemo(() => {
     const g = new BufferGeometry();
-    g.setAttribute('position', new Float32BufferAttribute(positions, 3));
+    g.setAttribute('position', new Float32BufferAttribute(pos, 3));
     return g;
-  }, [positions]);
+  }, [count, radius, zoneZ]);
 
   useFrame((state) => {
     if (!pointsRef.current) return;
@@ -51,164 +138,266 @@ export function StarField({ count = 400, radius = 130, zoneZ = 0 }: { count?: nu
   );
 }
 
-// ============ FLOATING PARTICLES (generic, color set directly) ============
+/* ------------------------------------------------------------------ *
+ * FLOATING PARTICLES
+ * ------------------------------------------------------------------ */
+
+/**
+ * Drift and pulse, entirely in the vertex shader.
+ *
+ * `instanceMatrix[3].xyz` is the particle's home position, which doubles as
+ * its phase source — using position means neighbouring motes never pulse in
+ * lockstep, and it costs no extra data.
+ */
+const FLOAT_VERTEX = /* glsl */ `
+  float ph = instanceMatrix[3][0] * 0.7 + instanceMatrix[3][2] * 1.3;
+  float sp = uSpeed * (0.6 + fract(ph * 0.13) * 0.8);
+
+  // Pulse: scale the vertex about the instance origin before drifting.
+  transformed *= 0.8 + sin(uTime * 2.0 + ph) * 0.2;
+
+  // Drift.
+  transformed.y += sin(uTime * sp + ph) * 1.5;
+  transformed.x += sin(uTime * sp * 0.7 + ph * 1.5) * uDrift * 3.0;
+  transformed.z += cos(uTime * sp * 0.5 + ph) * uDrift * 2.0;
+`;
+
 function FloatingParticles({
-  zoneZ, count = 50, color = '#ffd9a0', color2,
-  size = 0.1, speed = 0.4, heightRange = [2, 18] as [number, number],
-  drift = 0.3, glow = false,
+  zoneZ,
+  count = 50,
+  color = '#ffd9a0',
+  color2,
+  size = 0.1,
+  speed = 0.4,
+  heightRange = [2, 18] as [number, number],
+  drift = 0.3,
+  glow = false,
 }: {
-  zoneZ: number; count?: number; color?: string; color2?: string;
-  size?: number; speed?: number; heightRange?: [number, number];
-  drift?: number; glow?: boolean;
+  zoneZ: number;
+  count?: number;
+  color?: string;
+  color2?: string;
+  size?: number;
+  speed?: number;
+  heightRange?: [number, number];
+  drift?: number;
+  glow?: boolean;
 }) {
   const meshRef = useRef<InstancedMesh>(null);
-  const dummy = useMemo(() => new Object3D(), []);
-  const initialized = useRef(false);
+  const [lo, hi] = heightRange;
 
-  const particles = useMemo(() =>
-    Array.from({ length: count }, () => ({
-      x: (Math.random() - 0.5) * 80,
-      y: heightRange[0] + Math.random() * (heightRange[1] - heightRange[0]),
-      z: (Math.random() - 0.5) * 60 + zoneZ,
-      phase: Math.random() * Math.PI * 2,
-      speedMul: 0.6 + Math.random() * 0.8,
-      baseScale: 0.5 + Math.random() * 1.0,
-    })),
-    [count, heightRange, zoneZ]
+  const geo = useDisposable(() => new SphereGeometry(1, 5, 5), []);
+
+  const { mat, timeRef } = useDisposableParticleMaterial(
+    () => {
+      const m = new MeshStandardMaterial({
+        color,
+        emissive: new Color(color),
+        emissiveIntensity: glow ? 0.8 : 0.2,
+        transparent: true,
+        opacity: 0.7,
+        depthWrite: false,
+        vertexColors: true,
+      });
+      // Speed and drift are per-system constants, so they ride as uniforms
+      // rather than being baked into every instance.
+      const u = patchMaterial(m, FLOAT_VERTEX, { uSpeed: speed, uDrift: drift });
+      return { mat: m, uTime: u };
+    },
+    [color, glow, speed, drift],
   );
 
-  const c1 = useMemo(() => new Color(color), [color]);
-  const c2 = useMemo(() => new Color(color2 || color).offsetHSL(0.05, 0, 0.1), [color2, color]);
-
-  useEffect(() => {
+  /** Home positions and per-particle tint, written once. */
+  useLayoutEffect(() => {
     const mesh = meshRef.current;
-    if (!mesh || initialized.current) return;
-    for (let i = 0; i < particles.length; i++) {
-      const p = particles[i];
-      dummy.position.set(p.x, p.y, p.z);
-      dummy.scale.setScalar(p.baseScale * size);
+    if (!mesh) return;
+
+    const dummy = new Object3D();
+    const c1 = new Color(color);
+    const c2 = new Color(color2 || color).offsetHSL(0.05, 0, 0.1);
+
+    for (let i = 0; i < count; i++) {
+      dummy.position.set(
+        (rand(i, 1) - 0.5) * 80,
+        lo + rand(i, 2) * (hi - lo),
+        (rand(i, 3) - 0.5) * 60 + zoneZ,
+      );
+      dummy.scale.setScalar((0.5 + rand(i, 4)) * size);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
-      mesh.setColorAt(i, Math.random() > 0.5 ? c1 : c2);
+      mesh.setColorAt(i, rand(i, 5) > 0.5 ? c1 : c2);
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    initialized.current = true;
-  }, [particles, c1, c2, size, dummy]);
+  }, [count, size, zoneZ, lo, hi, color, color2]);
 
+  // The entire per-frame cost of this system: one scalar.
   useFrame((state) => {
-    const mesh = meshRef.current;
-    if (!mesh) return;
-    const t = state.clock.elapsedTime;
-    for (let i = 0; i < particles.length; i++) {
-      const p = particles[i];
-      const s = speed * p.speedMul;
-      const y = p.y + Math.sin(t * s + p.phase) * 1.5;
-      const x = p.x + Math.sin(t * s * 0.7 + p.phase * 1.5) * drift * 3;
-      const z = p.z + Math.cos(t * s * 0.5 + p.phase) * drift * 2;
-      const pulse = 0.8 + Math.sin(t * 2 + p.phase) * 0.2;
-      dummy.position.set(x, y, z);
-      dummy.scale.setScalar(p.baseScale * size * pulse);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
-    }
-    mesh.instanceMatrix.needsUpdate = true;
+    timeRef.current.value = state.clock.elapsedTime;
   });
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, count]} frustumCulled={false}>
-      <sphereGeometry args={[1, 5, 5]} />
-      <meshStandardMaterial
-        color={color}
-        emissive={color}
-        emissiveIntensity={glow ? 0.8 : 0.2}
-        transparent
-        opacity={0.7}
-        depthWrite={false}
-      />
-    </instancedMesh>
+    <instancedMesh
+      ref={meshRef}
+      args={[geo, mat, count]}
+      frustumCulled={false}
+    />
   );
 }
 
-// ============ FALLING PETALS ============
-function FallingPetals({
-  zoneZ, count = 35, color = '#f5a0b0', color2 = '#fdf0f0', spread = 35,
-}: { zoneZ: number; count?: number; color?: string; color2?: string; spread?: number }) {
-  const meshRef = useRef<InstancedMesh>(null);
-  const dummy = useMemo(() => new Object3D(), []);
-  const initialized = useRef(false);
+/* ------------------------------------------------------------------ *
+ * FALLING PETALS
+ * ------------------------------------------------------------------ */
 
-  const petals = useMemo(() =>
-    Array.from({ length: count }, () => ({
-      x: (Math.random() - 0.5) * spread * 2,
-      y: 3 + Math.random() * 15,
-      z: (Math.random() - 0.5) * spread + zoneZ,
-      phase: Math.random() * Math.PI * 2,
-      fallSpeed: 0.3 + Math.random() * 0.5,
-      swayAmp: 1 + Math.random() * 3,
-      rotSpeed: 1 + Math.random() * 2,
-      scale: 0.06 + Math.random() * 0.08,
-    })),
-    [count, spread, zoneZ]
+/**
+ * Fall, sway and tumble in the vertex shader.
+ *
+ * The fall wraps with `mod` over an 18-unit column, matching the CPU version's
+ * `(t * fallSpeed) % 18`. Tumbling is a rotation built inline from the phase,
+ * so each petal spins about its own centre rather than orbiting.
+ */
+const PETAL_VERTEX = /* glsl */ `
+  float ph = instanceMatrix[3][0] * 0.9 + instanceMatrix[3][2] * 1.7;
+  float fall = 0.3 + fract(ph * 0.31) * 0.5;
+  float sway = 1.0 + fract(ph * 0.17) * 3.0;
+  float rot  = 1.0 + fract(ph * 0.23) * 2.0;
+
+  // Tumble about the petal's own centre.
+  float ca = cos(uTime * rot * 0.5);
+  float sa = sin(uTime * rot * 0.5);
+  transformed.xz = mat2(ca, -sa, sa, ca) * transformed.xz;
+  float cb = cos(sin(uTime * rot + ph) * 0.8);
+  float sb = sin(sin(uTime * rot + ph) * 0.8);
+  transformed.yz = mat2(cb, -sb, sb, cb) * transformed.yz;
+
+  // Fall, wrapping through an 18-unit column, plus lateral sway.
+  transformed.y -= mod(uTime * fall, 18.0);
+  transformed.x += sin(uTime * 0.5 + ph) * sway;
+  transformed.z += cos(uTime * 0.4 + ph * 1.3) * sway * 0.5;
+`;
+
+function FallingPetals({
+  zoneZ,
+  count = 35,
+  color = '#f5a0b0',
+  color2 = '#fdf0f0',
+  spread = 35,
+}: {
+  zoneZ: number;
+  count?: number;
+  color?: string;
+  color2?: string;
+  spread?: number;
+}) {
+  const meshRef = useRef<InstancedMesh>(null);
+
+  const geo = useDisposable(() => new PlaneGeometry(1, 1), []);
+
+  const { mat, timeRef } = useDisposableParticleMaterial(
+    () => {
+      const m = new MeshStandardMaterial({
+        color,
+        emissive: new Color(color),
+        emissiveIntensity: 0.15,
+        transparent: true,
+        opacity: 0.65,
+        side: DoubleSide,
+        depthWrite: false,
+        vertexColors: true,
+      });
+      return { mat: m, uTime: patchMaterial(m, PETAL_VERTEX) };
+    },
+    [color],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const mesh = meshRef.current;
-    if (!mesh || initialized.current) return;
+    if (!mesh) return;
+
+    const dummy = new Object3D();
     const c1 = new Color(color);
     const c2 = new Color(color2);
-    for (let i = 0; i < petals.length; i++) {
-      dummy.position.set(petals[i].x, petals[i].y, petals[i].z);
-      dummy.scale.set(petals[i].scale, petals[i].scale * 0.5, petals[i].scale);
+
+    for (let i = 0; i < count; i++) {
+      const scale = 0.06 + rand(i, 4) * 0.08;
+      dummy.position.set(
+        (rand(i, 1) - 0.5) * spread * 2,
+        // Start high: the shader subtracts a wrapping fall from here.
+        3 + rand(i, 2) * 15 + 18,
+        (rand(i, 3) - 0.5) * spread + zoneZ,
+      );
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(scale, scale * 0.5, scale);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
-      mesh.setColorAt(i, Math.random() > 0.4 ? c1 : c2);
+      mesh.setColorAt(i, rand(i, 5) > 0.4 ? c1 : c2);
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    initialized.current = true;
-  }, [petals, color, color2, dummy]);
+  }, [count, spread, zoneZ, color, color2]);
 
   useFrame((state) => {
-    const mesh = meshRef.current;
-    if (!mesh) return;
-    const t = state.clock.elapsedTime;
-    for (let i = 0; i < petals.length; i++) {
-      const p = petals[i];
-      let y = p.y - (t * p.fallSpeed) % 18;
-      if (y < 0) y += 18;
-      const x = p.x + Math.sin(t * 0.5 + p.phase) * p.swayAmp;
-      const z = p.z + Math.cos(t * 0.4 + p.phase * 1.3) * p.swayAmp * 0.5;
-      dummy.position.set(x, y, z);
-      dummy.scale.set(p.scale, p.scale * 0.5, p.scale);
-      dummy.rotation.set(
-        Math.sin(t * p.rotSpeed + p.phase) * 0.8,
-        t * p.rotSpeed * 0.5,
-        Math.cos(t * p.rotSpeed * 0.7 + p.phase) * 0.6
-      );
-      dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
-    }
-    mesh.instanceMatrix.needsUpdate = true;
+    timeRef.current.value = state.clock.elapsedTime;
   });
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, count]} frustumCulled={false}>
-      <planeGeometry args={[1, 1]} />
-      <meshStandardMaterial
-        color={color}
-        emissive={color}
-        emissiveIntensity={0.15}
-        transparent
-        opacity={0.65}
-        side={DoubleSide}
-        depthWrite={false}
-      />
-    </instancedMesh>
+    <instancedMesh
+      ref={meshRef}
+      args={[geo, mat, count]}
+      frustumCulled={false}
+    />
   );
 }
 
-// ============ MAIN ============
+/* ------------------------------------------------------------------ *
+ * Shared helper
+ * ------------------------------------------------------------------ */
+
+/**
+ * Build a patched particle material and dispose it when it is replaced or the
+ * component unmounts. These materials are per-system (each carries its own
+ * time uniform), so they are NOT shared through `three-cache`.
+ */
+function useDisposableParticleMaterial(
+  factory: () => { mat: MeshStandardMaterial; uTime: TimeUniform },
+  deps: React.DependencyList,
+) {
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/use-memo
+  const built = useMemo(factory, deps);
+  const matRef = useRef(built.mat);
+
+  /**
+   * The time uniform is handed back through a ref rather than directly.
+   *
+   * `useFrame` writes to it every frame, and a value returned straight out of
+   * `useMemo` is treated as immutable — mutating it is exactly the kind of
+   * render-output mutation the React compiler rejects. A ref is the sanctioned
+   * escape hatch for mutable per-frame state.
+   */
+  const timeRef = useRef(built.uTime);
+
+  useLayoutEffect(() => {
+    if (matRef.current !== built.mat) {
+      matRef.current.dispose();
+      matRef.current = built.mat;
+    }
+    timeRef.current = built.uTime;
+  }, [built.mat, built.uTime]);
+
+  useLayoutEffect(
+    () => () => {
+      matRef.current.dispose();
+    },
+    [],
+  );
+
+  return { mat: built.mat, timeRef };
+}
+
+/* ------------------------------------------------------------------ *
+ * MAIN
+ * ------------------------------------------------------------------ */
+
 export function SkyAtmosphere({ eventId, zoneZ }: { eventId: string; zoneZ: number }) {
   switch (eventId) {
     case 'entrance':

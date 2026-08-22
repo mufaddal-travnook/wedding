@@ -6,6 +6,8 @@ import { Canopy, CANOPY_RADIUS } from '../props/Canopy';
 import { LightPole } from '../props/LightPole';
 import { BanquetTable } from '../props/BanquetTable';
 import { GuestCluster } from '../props/GuestCluster';
+import { GuestCrowd, type CrowdMember } from '../props/GuestCrowd';
+import { banquetMembers, clusterMembers } from '../props/crowd-layout';
 import { rand } from '@/app/lib/seeded-random';
 import {
   scatterBackground,
@@ -68,8 +70,19 @@ export function RoadsideDecor({ events, currentZoneZ = 0 }: RoadsideDecorProps) 
     () => ({
       fromZ: firstZ + 30,
       toZ: lastZ - 40,
-      isBlocked: (x, z, radius) =>
-        cameras.some((c) => Math.hypot(x - c.x, z - c.z) < 13 + radius),
+      // Squared distance: this runs once per candidate across every scatter
+      // layer, and Math.hypot is markedly slower than a plain multiply in V8
+      // because of its overflow guards. Comparing squares avoids the sqrt too.
+      isBlocked: (x, z, radius) => {
+        const limit = 13 + radius;
+        const limitSq = limit * limit;
+        for (const c of cameras) {
+          const dx = x - c.x;
+          const dz = z - c.z;
+          if (dx * dx + dz * dz < limitSq) return true;
+        }
+        return false;
+      },
     }),
     [firstZ, lastZ, cameras],
   );
@@ -189,16 +202,66 @@ export function RoadsideDecor({ events, currentZoneZ = 0 }: RoadsideDecorProps) 
 
   const isNear = (z: number, range: number) => Math.abs(z - currentZoneZ) < range;
 
-  /** The one canopy allowed a real light — whichever is closest to the guest. */
-  const nearestCanopyZ = useMemo(() => {
-    let best: number | null = null;
-    for (const c of canopies) {
-      if (best === null || Math.abs(c.z - currentZoneZ) < Math.abs(best - currentZoneZ)) {
-        best = c.z;
+  /**
+   * The one canopy allowed a real light — whichever is closest to the guest.
+   *
+   * `currentZoneZ` only ever takes one of the zone z values, and the canopies
+   * are static, so the answer is precomputed once per layout rather than
+   * rescanned on every zone change: O(zones x canopies) once, then O(1) per
+   * change instead of O(canopies).
+   *
+   * The result is an INDEX, not a z coordinate. Selecting by `c.z === z`
+   * compared floats for equality, which happened to work only because the
+   * value was copied verbatim from the same array.
+   */
+  const nearestCanopyByZone = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const { zoneZ } of events) {
+      let bestIdx = -1;
+      let bestDist = Infinity;
+      for (let i = 0; i < canopies.length; i++) {
+        const d = Math.abs(canopies[i].z - zoneZ);
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = i;
+        }
       }
+      map.set(zoneZ, bestIdx);
     }
-    return best;
-  }, [canopies, currentZoneZ]);
+    return map;
+  }, [canopies, events]);
+
+  const litCanopyIdx = nearestCanopyByZone.get(currentZoneZ) ?? -1;
+
+  /** Which clusters are close enough to earn articulated, swaying guests. */
+  const animatedCluster = (x: number, z: number) =>
+    Math.abs(x) < ANIMATE_RANGE_X && isNear(z, ANIMATE_RANGE_Z);
+
+  /**
+   * Every static guest in the background, gathered into one list.
+   *
+   * This is the single biggest saving in the scene. Each guest used to be a
+   * ~60-mesh `<Person>`; at 61 guests that was 3,660 draw calls. Collected
+   * here and handed to `<GuestCrowd>`, they become one instanced draw call
+   * per body type — four in practice, regardless of crowd size.
+   *
+   * Animated clusters are skipped: they render articulated guests of their
+   * own, and including them here would draw those guests twice.
+   */
+  const crowd = useMemo(() => {
+    const members: CrowdMember[] = [];
+
+    for (const b of banquets) {
+      members.push(...banquetMembers([b.x, 0, b.z], b.seed));
+    }
+    for (const c of clusters) {
+      if (animatedCluster(c.x, c.z)) continue;
+      members.push(...clusterMembers([c.x, 0, c.z], c.seed));
+    }
+
+    return members;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [banquets, clusters, currentZoneZ]);
 
   return (
     <group>
@@ -234,24 +297,27 @@ export function RoadsideDecor({ events, currentZoneZ = 0 }: RoadsideDecorProps) 
           // Glow adds a real pointLight, and several canopies can be near the
           // guest at once. Only the single closest one gets it; the rest keep
           // their emissive finial, which costs nothing.
-          glow={c.z === nearestCanopyZ}
+          glow={i === litCanopyIdx}
         />
       ))}
 
-      {/* Banquet tables with seated guests */}
+      {/* Banquet tables and chairs — their guests come from <GuestCrowd>. */}
       {banquets.map((b, i) => (
-        <BanquetTable key={`b${i}`} position={[b.x, 0, b.z]} seed={b.seed} />
+        <BanquetTable key={`b${i}`} position={[b.x, 0, b.z]} />
       ))}
 
-      {/* Standing groups talking */}
+      {/* Cocktail tables. Near clusters also render their own swaying guests. */}
       {clusters.map((c, i) => (
         <GuestCluster
           key={`g${i}`}
           position={[c.x, 0, c.z]}
           seed={c.seed}
-          animate={Math.abs(c.x) < ANIMATE_RANGE_X && isNear(c.z, ANIMATE_RANGE_Z)}
+          animate={animatedCluster(c.x, c.z)}
         />
       ))}
+
+      {/* Every static guest, as a few instanced draw calls. */}
+      <GuestCrowd members={crowd} />
 
       {/* Warm light poles */}
       {poles.map((p, i) => (
